@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import Highcharts from "highcharts";
 import { HighchartsReact } from "highcharts-react-official";
 
-// kN to metric ton-force
 const kNtoTon = (kN) => (kN / 9.80665).toFixed(1);
 
 // ─── Physics Engine ───────────────────────────────────────────────
@@ -35,7 +34,6 @@ function computeRecoil(params) {
     if (v <= 0 || x >= strokeLength) break;
 
     const progress = x / strokeLength;
-
     let Fshape;
     if (progress < 0.03) {
       Fshape = avgForce * (0.5 + 0.65 * (progress / 0.03));
@@ -50,7 +48,6 @@ function computeRecoil(params) {
     }
 
     const remainingEnergy = 0.5 * recoilMass * v * v;
-
     timeData.push([parseFloat((t * 1000).toFixed(2)), parseFloat((Fshape / 1000).toFixed(2))]);
     posData.push({
       x: parseFloat((x * 1000).toFixed(1)),
@@ -69,17 +66,14 @@ function computeRecoil(params) {
   const idealPistonArea = avgForce / targetPressure;
   const idealPistonAreaCm2 = idealPistonArea * 1e4;
   const idealBoreDia = Math.sqrt(4 * idealPistonArea / Math.PI) * 1000;
-
   const rho = 860;
   const Cd = 0.70;
   const idealOrificeArea = idealPistonArea * V0 * Math.sqrt(rho / (2 * Cd * Cd * avgForce));
   const idealOrificeAreaCm2 = idealOrificeArea * 1e4;
   const orificeRatio = idealOrificeArea / idealPistonArea;
-
   const idealRodDia = idealBoreDia * 0.55;
   const overallLength = strokeLength * 2.5;
   const fluidVolume = idealPistonArea * strokeLength * 1e6;
-
   const minPressure = (avgForce * 0.85) / idealPistonArea / 1e6;
   const maxPressure = peakForce / idealPistonArea / 1e6;
 
@@ -88,16 +82,11 @@ function computeRecoil(params) {
     peakForce, recoilTime, forceReduction,
     timeData, posData, peakToAvg,
     heuristics: {
-      pistonAreaCm2: idealPistonAreaCm2,
-      boreDiaMm: idealBoreDia,
-      orificeAreaCm2: idealOrificeAreaCm2,
-      orificeRatio,
-      rodDiaMm: idealRodDia,
-      overallLengthMm: overallLength * 1000,
-      fluidVolumeCm3: fluidVolume,
-      minPressureMPa: minPressure,
-      maxPressureMPa: maxPressure,
-      Cd
+      pistonAreaCm2: idealPistonAreaCm2, boreDiaMm: idealBoreDia,
+      orificeAreaCm2: idealOrificeAreaCm2, orificeRatio,
+      rodDiaMm: idealRodDia, overallLengthMm: overallLength * 1000,
+      fluidVolumeCm3: fluidVolume, minPressureMPa: minPressure,
+      maxPressureMPa: maxPressure, Cd
     }
   };
 }
@@ -126,8 +115,8 @@ function ParamSlider({ label, unit, value, min, max, step, onChange, description
   );
 }
 
-// ─── Stat Card ────────────────────────────────────────────────────
-function StatCard({ label, value, unit, tonValue, accent, bg }) {
+// ─── Stat Card with formula ───────────────────────────────────────
+function StatCard({ label, value, unit, tonValue, accent, bg, formula }) {
   return (
     <div style={{
       background: bg || "#f8f9fb", border: "1px solid " + (bg ? "#fecaca" : "#e2e5ea"),
@@ -138,6 +127,7 @@ function StatCard({ label, value, unit, tonValue, accent, bg }) {
         {value} <span style={{ fontSize: "11px", color: "#a0a8b8", fontWeight: 400 }}>{unit}</span>
       </div>
       {tonValue && <div style={{ color: "#6b7280", fontSize: "12px", fontFamily: MONO, fontWeight: 500, marginTop: "2px" }}>({tonValue} ton)</div>}
+      {formula && <div style={{ color: "#a0a8b8", fontSize: "10px", fontFamily: MONO, marginTop: "4px", fontStyle: "italic" }}>{formula}</div>}
     </div>
   );
 }
@@ -164,7 +154,6 @@ export default function AIMSRecoilCalculator() {
   const avgKN = results.avgForce / 1000;
   const peakKN = results.peakForce / 1000;
 
-  // Vertical components at given elevation
   const sinEl = Math.sin(elevation * Math.PI / 180);
   const verticalPeakKN = peakKN * sinEl;
   const verticalAvgKN = avgKN * sinEl;
@@ -183,93 +172,72 @@ export default function AIMSRecoilCalculator() {
 
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
-  // ── Highcharts: Force vs Time ──
+  // ── Chart configs ──
+  const chartBase = { style: { fontFamily: FONT } };
+  const axisLabelStyle = { fontFamily: MONO, fontSize: "10px" };
+
   const forceTimeOptions = {
-    chart: { type: "areaspline", height: 300, style: { fontFamily: FONT } },
-    title: { text: null },
-    credits: { enabled: false },
-    xAxis: { title: { text: "Time (ms)" }, labels: { style: { fontFamily: MONO, fontSize: "10px" } } },
-    yAxis: { title: { text: "Force (kN)" }, labels: { style: { fontFamily: MONO, fontSize: "10px" } },
+    chart: { ...chartBase, type: "areaspline", height: 300 },
+    title: { text: null }, credits: { enabled: false },
+    xAxis: { title: { text: "Time (ms)" }, labels: { style: axisLabelStyle } },
+    yAxis: { title: { text: "Force (kN)" }, labels: { style: axisLabelStyle },
       plotLines: [{ value: avgKN, color: "#15803d", dashStyle: "Dash", width: 1.5,
-        label: { text: `Avg: ${avgKN.toFixed(0)} kN (${kNtoTon(avgKN)} ton)`, style: { color: "#15803d", fontSize: "10px", fontWeight: "bold" } }
+        label: { text: `F_avg: ${avgKN.toFixed(0)} kN (${kNtoTon(avgKN)} ton)`, style: { color: "#15803d", fontSize: "10px", fontWeight: "bold" } }
       }]
     },
-    tooltip: {
-      shared: true, crosshairs: true,
+    tooltip: { shared: true, crosshairs: true, style: { fontFamily: FONT },
       headerFormat: "<b>t = {point.x:.1f} ms</b><br/>",
-      pointFormat: '<span style="color:{series.color}">\u25CF</span> {series.name}: <b>{point.y:.1f} kN ({point.ton} ton)</b><br/>',
-      style: { fontFamily: FONT }
+      pointFormat: '<span style="color:{series.color}">\u25CF</span> {series.name}: <b>{point.y:.1f} kN ({point.ton} ton)</b><br/>'
     },
     legend: { enabled: false },
     plotOptions: { areaspline: { fillOpacity: 0.06, lineWidth: 2.5, marker: { enabled: false } } },
-    series: [{
-      name: "Force",
-      color: "#1e40af",
-      data: results.timeData.map(([t, F]) => ({ x: t, y: F, ton: kNtoTon(F) }))
-    }]
+    series: [{ name: "Force", color: "#1e40af", data: results.timeData.map(([t, F]) => ({ x: t, y: F, ton: kNtoTon(F) })) }]
   };
 
-  // ── Highcharts: Force + Velocity + Energy vs Stroke ──
-  const strokeForceData = results.posData.map(d => ({ x: d.x, y: d.F, ton: kNtoTon(d.F) }));
-  const strokeVelData = results.posData.map(d => [d.x, d.v]);
-  const strokeEnergyData = results.posData.map(d => [d.x, d.Er]);
-
   const forceStrokeOptions = {
-    chart: { height: 300, style: { fontFamily: FONT } },
-    title: { text: null },
-    credits: { enabled: false },
-    xAxis: { title: { text: "Stroke (mm)" }, labels: { style: { fontFamily: MONO, fontSize: "10px" } } },
-    yAxis: [
-      {
-        title: { text: "Force (kN)", style: { color: "#c2410c" } },
-        labels: { style: { fontFamily: MONO, fontSize: "10px", color: "#c2410c" } },
-        plotLines: [{ value: avgKN, color: "#15803d", dashStyle: "Dash", width: 1.5,
-          label: { text: `Avg: ${avgKN.toFixed(0)} kN (${kNtoTon(avgKN)} ton)`, style: { color: "#15803d", fontSize: "10px", fontWeight: "bold" } }
-        }]
-      },
-      {
-        title: { text: "Velocity (m/s) / Energy (kJ)", style: { color: "#6b7280" } },
-        labels: { style: { fontFamily: MONO, fontSize: "10px", color: "#6b7280" } },
-        opposite: true
-      }
-    ],
-    tooltip: {
-      shared: true, crosshairs: true,
-      style: { fontFamily: FONT }
+    chart: { ...chartBase, type: "areaspline", height: 300 },
+    title: { text: null }, credits: { enabled: false },
+    xAxis: { title: { text: "Stroke (mm)" }, labels: { style: axisLabelStyle } },
+    yAxis: { title: { text: "Force (kN)" }, labels: { style: axisLabelStyle },
+      plotLines: [{ value: avgKN, color: "#15803d", dashStyle: "Dash", width: 1.5,
+        label: { text: `F_avg: ${avgKN.toFixed(0)} kN (${kNtoTon(avgKN)} ton)`, style: { color: "#15803d", fontSize: "10px", fontWeight: "bold" } }
+      }]
     },
-    legend: { align: "left", verticalAlign: "top", floating: true, y: -5, itemStyle: { fontFamily: FONT, fontSize: "11px", fontWeight: "600" } },
-    plotOptions: {
-      areaspline: { fillOpacity: 0.06, lineWidth: 2.5, marker: { enabled: false } },
-      spline: { lineWidth: 2, marker: { enabled: false } }
+    tooltip: { shared: true, crosshairs: true, style: { fontFamily: FONT },
+      headerFormat: "<b>x = {point.x:.1f} mm</b><br/>",
+      pointFormat: '<span style="color:{series.color}">\u25CF</span> Force: <b>{point.y:.1f} kN ({point.ton} ton)</b><br/>'
     },
-    series: [
-      {
-        name: "Force (kN)",
-        type: "areaspline",
-        color: "#c2410c",
-        data: strokeForceData,
-        tooltip: { pointFormat: '<span style="color:{series.color}">\u25CF</span> Force: <b>{point.y:.1f} kN ({point.ton} ton)</b><br/>' },
-        yAxis: 0
-      },
-      {
-        name: "Velocity (m/s)",
-        type: "spline",
-        color: "#0891b2",
-        dashStyle: "Dash",
-        data: strokeVelData,
-        tooltip: { pointFormat: '<span style="color:{series.color}">\u25CF</span> Velocity: <b>{point.y:.1f} m/s</b><br/>' },
-        yAxis: 1
-      },
-      {
-        name: "Rem. Energy (kJ)",
-        type: "spline",
-        color: "#d97706",
-        dashStyle: "ShortDot",
-        data: strokeEnergyData,
-        tooltip: { pointFormat: '<span style="color:{series.color}">\u25CF</span> Energy: <b>{point.y:.1f} kJ</b><br/>' },
-        yAxis: 1
-      }
-    ]
+    legend: { enabled: false },
+    plotOptions: { areaspline: { fillOpacity: 0.06, lineWidth: 2.5, marker: { enabled: false } } },
+    series: [{ name: "Force", color: "#c2410c", data: results.posData.map(d => ({ x: d.x, y: d.F, ton: kNtoTon(d.F) })) }]
+  };
+
+  const velocityStrokeOptions = {
+    chart: { ...chartBase, type: "areaspline", height: 300 },
+    title: { text: null }, credits: { enabled: false },
+    xAxis: { title: { text: "Stroke (mm)" }, labels: { style: axisLabelStyle } },
+    yAxis: { title: { text: "Velocity (m/s)" }, labels: { style: axisLabelStyle } },
+    tooltip: { shared: true, crosshairs: true, style: { fontFamily: FONT },
+      headerFormat: "<b>x = {point.x:.1f} mm</b><br/>",
+      pointFormat: '<span style="color:{series.color}">\u25CF</span> Velocity: <b>{point.y:.1f} m/s</b><br/>'
+    },
+    legend: { enabled: false },
+    plotOptions: { areaspline: { fillOpacity: 0.08, lineWidth: 2.5, marker: { enabled: false } } },
+    series: [{ name: "Velocity", color: "#0891b2", data: results.posData.map(d => [d.x, d.v]) }]
+  };
+
+  const energyStrokeOptions = {
+    chart: { ...chartBase, type: "areaspline", height: 300 },
+    title: { text: null }, credits: { enabled: false },
+    xAxis: { title: { text: "Stroke (mm)" }, labels: { style: axisLabelStyle } },
+    yAxis: { title: { text: "Kinetic Energy (kJ)" }, labels: { style: axisLabelStyle } },
+    tooltip: { shared: true, crosshairs: true, style: { fontFamily: FONT },
+      headerFormat: "<b>x = {point.x:.1f} mm</b><br/>",
+      pointFormat: '<span style="color:{series.color}">\u25CF</span> KE: <b>{point.y:.1f} kJ</b><br/>'
+    },
+    legend: { enabled: false },
+    plotOptions: { areaspline: { fillOpacity: 0.08, lineWidth: 2.5, marker: { enabled: false } } },
+    series: [{ name: "Kinetic Energy", color: "#d97706", data: results.posData.map(d => [d.x, d.Er]) }]
   };
 
   return (
@@ -293,10 +261,8 @@ export default function AIMSRecoilCalculator() {
         {/* ════════ ROW 1: Inputs + Key Results ════════ */}
         <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "20px", marginBottom: "20px" }}>
 
-          {/* ── Inputs ── */}
           <div style={cardStyle}>
             <h2 style={sectionHeading}>Inputs</h2>
-
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>Ballistic</div>
             <ParamSlider label="Projectile Mass" unit="kg" value={projMass} min={8} max={20} step={0.5} onChange={setProjMass} description="HE: ~13 kg · ER: ~16 kg" />
             <ParamSlider label="Charge Mass" unit="kg" value={chargeMass} min={0.5} max={6} step={0.1} onChange={setChargeMass} description="Zone 0: ~0.5 kg · Zone 4: ~3.5 kg" />
@@ -316,36 +282,42 @@ export default function AIMSRecoilCalculator() {
             </div>
           </div>
 
-          {/* ── Key Results Dashboard ── */}
           <div style={cardStyle}>
             <h2 style={sectionHeading}>Results</h2>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
-              <StatCard label="Recoil Impulse" value={results.impulse.toFixed(0)} unit="N·s" accent="#1e40af" />
-              <StatCard label="Free Recoil Velocity" value={results.V0.toFixed(1)} unit="m/s" accent="#1e40af" />
-              <StatCard label="Recoil Energy" value={(results.recoilEnergy / 1000).toFixed(1)} unit="kJ" accent="#b45309" />
+              <StatCard label="Recoil Impulse" value={results.impulse.toFixed(0)} unit="N·s" accent="#1e40af"
+                formula={`I = m_p·V + m_c·1.5·V`} />
+              <StatCard label="Free Recoil Velocity" value={results.V0.toFixed(1)} unit="m/s" accent="#1e40af"
+                formula={`V₀ = I / M`} />
+              <StatCard label="Recoil Energy" value={(results.recoilEnergy / 1000).toFixed(1)} unit="kJ" accent="#b45309"
+                formula={`E = ½·M·V₀²`} />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-              <StatCard label="Rigid Force (no buffer)" value={rigidKN.toFixed(0)} unit="kN" accent="#dc2626" tonValue={kNtoTon(rigidKN)} bg="#fef2f2" />
-              <StatCard label="Avg Buffered Force" value={avgKN.toFixed(1)} unit="kN" accent="#15803d" tonValue={kNtoTon(avgKN)} />
-              <StatCard label="Peak Buffered Force" value={peakKN.toFixed(1)} unit="kN" accent="#c2410c" tonValue={kNtoTon(peakKN)} />
+              <StatCard label="Rigid Force (no buffer)" value={rigidKN.toFixed(0)} unit="kN" accent="#dc2626" tonValue={kNtoTon(rigidKN)} bg="#fef2f2"
+                formula={`F = I / τ`} />
+              <StatCard label="Avg Buffered Force" value={avgKN.toFixed(1)} unit="kN" accent="#15803d" tonValue={kNtoTon(avgKN)}
+                formula={`F_avg = E / s`} />
+              <StatCard label="Peak Buffered Force" value={peakKN.toFixed(1)} unit="kN" accent="#c2410c" tonValue={kNtoTon(peakKN)}
+                formula={`F_peak = 1.15 × F_avg`} />
               <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 14px" }}>
                 <div style={{ color: "#8892a4", fontSize: "10px", fontFamily: FONT, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>Force Reduction</div>
                 <div style={{ color: "#16a34a", fontSize: "20px", fontFamily: MONO, fontWeight: 700 }}>
                   {results.forceReduction.toFixed(1)}<span style={{ fontSize: "12px" }}>%</span>
                 </div>
                 <div style={{ color: "#9ca3af", fontSize: "10px", marginTop: "2px" }}>Duration: {(results.recoilTime * 1000).toFixed(1)} ms</div>
+                <div style={{ color: "#a0a8b8", fontSize: "10px", fontFamily: MONO, marginTop: "4px", fontStyle: "italic" }}>(F_rigid − F_peak) / F_rigid</div>
               </div>
             </div>
 
-            {/* ── Vertical Load on Vehicle Chassis ── */}
+            {/* Vertical Load */}
             <div style={{ background: "#fef3c7", border: "2px solid #f59e0b", borderRadius: "8px", padding: "14px 18px", marginBottom: "16px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                 <div>
                   <div style={{ color: "#92400e", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px", fontWeight: 700 }}>Vertical Load on Vehicle Chassis</div>
                   <div style={{ color: "#78716c", fontSize: "11px" }}>
-                    At elevation {elevation}° (sin {elevation}° = {sinEl.toFixed(3)})
+                    At elevation {elevation}° — F<sub>vert</sub> = F × sin({elevation}°)
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: "24px" }}>
@@ -367,7 +339,7 @@ export default function AIMSRecoilCalculator() {
               </div>
             </div>
 
-            {/* Cylinder heuristics — compact table */}
+            {/* Heuristics */}
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px" }}>Buffer Cylinder Heuristics</div>
             <div style={{ background: "#f8f9fb", border: "1px solid #e8eaef", borderRadius: "8px", overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: FONT }}>
@@ -406,19 +378,31 @@ export default function AIMSRecoilCalculator() {
           </div>
         </div>
 
-        {/* ════════ ROW 2: Charts side-by-side ════════ */}
+        {/* ════════ ROW 2: Force Charts ════════ */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
           <div style={cardStyle}>
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Force vs Time (Ideal Variable-Orifice)</div>
             <HighchartsReact highcharts={Highcharts} options={forceTimeOptions} />
           </div>
           <div style={cardStyle}>
-            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Force, Velocity & Energy vs Stroke</div>
+            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Force vs Stroke</div>
             <HighchartsReact highcharts={Highcharts} options={forceStrokeOptions} />
           </div>
         </div>
 
-        {/* ════════ ROW 3: RFQ Email Draft ════════ */}
+        {/* ════════ ROW 3: Velocity + Energy Charts ════════ */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+          <div style={cardStyle}>
+            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Recoil Velocity vs Stroke</div>
+            <HighchartsReact highcharts={Highcharts} options={velocityStrokeOptions} />
+          </div>
+          <div style={cardStyle}>
+            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Remaining Kinetic Energy vs Stroke</div>
+            <HighchartsReact highcharts={Highcharts} options={energyStrokeOptions} />
+          </div>
+        </div>
+
+        {/* ════════ ROW 4: RFQ Email Draft ════════ */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
             <h2 style={{ ...sectionHeading, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>RFQ Email Draft</h2>
@@ -439,7 +423,6 @@ export default function AIMSRecoilCalculator() {
               }}
             >Copy to Clipboard</button>
           </div>
-
           <div style={{ borderBottom: "2px solid #c9a84c", marginBottom: "16px" }} />
 
           <div id="rfq-email-body" style={{ background: "#fafbfc", border: "1px solid #e8eaef", borderRadius: "8px", padding: "24px 28px", fontSize: "13px", lineHeight: 1.75, color: "#374151" }}>
@@ -447,7 +430,7 @@ export default function AIMSRecoilCalculator() {
             <div style={{ marginBottom: "16px" }}>
               <div style={{ color: "#8892a4", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>Subject</div>
               <div style={{ fontWeight: 600, color: "#1e3a5f" }}>
-                RFQ — Heavy-Duty Hydraulic Shock Absorber for 120mm Mortar Recoil System (AIMS Programme)
+                RFQ — Industrial Heavy-Duty Hydraulic Recoil Brake / Shock Absorber
               </div>
             </div>
 
@@ -456,108 +439,67 @@ export default function AIMSRecoilCalculator() {
             <p>Dear Sir/Madam,</p>
 
             <p>
-              We are writing from <strong>ARDIC (Advance Research, Development and Innovation Center)</strong>, Wah Cantt, Pakistan. We are currently executing the <strong>AIMS (Autonomous Integrated Mortar System)</strong> programme — an 18-month R&D effort integrating a 120mm smooth-bore mortar onto a Toyota Land Cruiser 79 platform.
+              We are writing from <strong>ARDIC (Advance Research, Development and Innovation Center)</strong>, Heavy Industries Taxila (HIT), Taxila, Pakistan. We are currently sourcing an <strong>industrial-grade heavy-duty hydraulic recoil brake</strong> for an internal R&D application involving high-impulse repetitive loading.
             </p>
 
             <p>
-              As part of this programme, we require an <strong>off-the-shelf heavy-duty hydraulic shock absorber</strong> (variable-orifice type, with integrated return mechanism) to serve as the primary recoil buffer. We understand the <strong>Enidine HD/HDN Series</strong> heavy-duty industrial shock absorbers may be suitable for this application and would appreciate a formal quotation based on the following specifications.
+              We require an <strong>off-the-shelf unit available for immediate delivery</strong> from your current product range. We are open to either a <strong>single or dual absorber configuration</strong> — whichever best meets the requirements below. Please advise on the most suitable product from your catalogue.
             </p>
 
-            <p style={{ fontWeight: 600, color: "#1e3a5f", marginTop: "20px", marginBottom: "8px" }}>1. Application Overview</p>
+            <p style={{ fontWeight: 600, color: "#1e3a5f", marginTop: "20px", marginBottom: "8px" }}>Operating Requirements</p>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", marginBottom: "16px" }}>
               <tbody>
                 {[
-                  ["Weapon System", "120mm smooth-bore mortar (vehicle-mounted)"],
-                  ["Platform", "Toyota Land Cruiser 79 (4×4)"],
-                  ["Firing Cycle", "Repetitive, up to 6–8 rounds per minute"],
-                  ["Operating Environment", "Desert & mountain terrain, −10°C to +55°C ambient"],
-                  ["Mounting Orientation", `Near-vertical (elevation ${elevation}° typical, range 45°–85°), with lateral loads during traverse`],
-                ].map(([lbl, val], i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #e8eaef" }}>
-                    <td style={{ padding: "6px 12px 6px 0", color: "#6b7280", fontWeight: 500, width: "200px" }}>{lbl}</td>
-                    <td style={{ padding: "6px 0", color: "#1a202c" }}>{val}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>2. Recoil Buffer Requirements</p>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", marginBottom: "16px" }}>
-              <tbody>
-                {[
-                  ["Recoil Energy per Cycle", `${(results.recoilEnergy / 1000).toFixed(1)} kJ`],
+                  ["Energy per Cycle", `${(results.recoilEnergy / 1000).toFixed(1)} kJ`],
                   ["Peak Input Velocity", `${results.V0.toFixed(1)} m/s`],
-                  ["Required Stroke", `${strokeLength} mm`],
+                  ["Stroke (Travel)", "400–500 mm preferred"],
                   ["Recoiling Mass", `${recoilMass} kg`],
-                  ["Recoil Impulse", `${results.impulse.toFixed(0)} N·s`],
-                  ["Target Avg Braking Force", `${avgKN.toFixed(1)} kN (${kNtoTon(avgKN)} ton)`],
-                  ["Max Allowable Peak Force", `${peakKN.toFixed(1)} kN (${kNtoTon(peakKN)} ton)`],
-                  ["Recoil Duration", `${(results.recoilTime * 1000).toFixed(1)} ms`],
-                  ["Force Profile", "Near-constant (variable-orifice preferred)"],
-                  ["Return Mechanism", "Required — spring or gas-assisted accumulator"],
+                  ["Force Profile", "Constant force / near-constant (variable-orifice type preferred)"],
+                  ["Return Mechanism", "Required — spring or gas-assisted (must fully reset between cycles)"],
+                  ["Duty Cycle", "Repetitive impulse, up to 6–8 cycles per minute"],
+                  ["Configuration", "Single or dual unit — please advise best option"],
+                  ["Operating Temp", "−10°C to +55°C ambient"],
+                  ["Mounting", "Near-vertical orientation (45°–85° from horizontal)"],
                 ].map(([lbl, val], i) => (
                   <tr key={i} style={{ borderBottom: "1px solid #e8eaef" }}>
-                    <td style={{ padding: "6px 12px 6px 0", color: "#6b7280", fontWeight: 500, width: "240px" }}>{lbl}</td>
+                    <td style={{ padding: "6px 12px 6px 0", color: "#6b7280", fontWeight: 500, width: "220px" }}>{lbl}</td>
                     <td style={{ padding: "6px 0", color: "#1a202c", fontWeight: 600 }}>{val}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>3. Estimated Cylinder Sizing (for reference)</p>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", marginBottom: "16px" }}>
-              <tbody>
-                {[
-                  ["Bore Diameter", `~${h.boreDiaMm.toFixed(0)} mm`],
-                  ["Rod Diameter", `~${h.rodDiaMm.toFixed(0)} mm`],
-                  ["Overall Length (est.)", `~${h.overallLengthMm.toFixed(0)} mm`],
-                  ["Working Pressure Range", `${h.minPressureMPa.toFixed(0)}–${h.maxPressureMPa.toFixed(0)} MPa`],
-                  ["Hydraulic Fluid", "MIL-PRF-46170 compatible (ρ ≈ 860 kg/m³)"],
-                ].map(([lbl, val], i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #e8eaef" }}>
-                    <td style={{ padding: "6px 12px 6px 0", color: "#6b7280", fontWeight: 500, width: "240px" }}>{lbl}</td>
-                    <td style={{ padding: "6px 0", color: "#1a202c" }}>{val}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>4. Information Requested</p>
+            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>What We Need From You</p>
             <ol style={{ paddingLeft: "20px", marginBottom: "16px" }}>
-              <li>Recommended model(s) from your HD/HDN product line that meet or exceed the above specifications.</li>
-              <li>Unit pricing for quantities of 2 (prototype) and 10 (low-rate initial production).</li>
-              <li>Lead time for prototype delivery.</li>
-              <li>Certified force-displacement and force-velocity characterization data for the recommended model.</li>
-              <li>Mounting interface drawings and envelope dimensions.</li>
-              <li>Service life rating (number of full-energy cycles before rebuild/replacement).</li>
-              <li>Availability of customization (stroke length, mounting, return spring rate).</li>
+              <li>Recommended product model(s) from your <strong>available inventory</strong> that meet or exceed the above requirements.</li>
+              <li>Whether a single unit or dual-unit configuration is recommended for this energy level.</li>
+              <li>Unit pricing for quantities of 2 (prototype evaluation) and 10 (initial procurement).</li>
+              <li>Delivery lead time — <strong>immediate availability is strongly preferred</strong>.</li>
+              <li>Force-displacement and force-velocity characterization data (if available).</li>
+              <li>Mounting interface drawings and overall envelope dimensions.</li>
+              <li>Service life rating (number of full-energy cycles before rebuild).</li>
             </ol>
 
-            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>5. Timeline</p>
             <p>
-              We intend to finalize vendor selection within <strong>30 days</strong> of this enquiry. Prototype units are required within <strong>90 days</strong> of order placement. Early engagement on technical feasibility is highly appreciated.
-            </p>
-
-            <p>
-              Please do not hesitate to contact us for any clarification or additional technical data. We are happy to arrange a technical call to discuss the application in further detail.
+              We are looking to finalize procurement quickly. Please respond at your earliest convenience with available options and pricing. We are happy to arrange a technical call if needed.
             </p>
 
             <div style={{ marginTop: "24px" }}>
               <p style={{ marginBottom: "4px" }}>Best regards,</p>
               <p style={{ marginBottom: "2px" }}><strong>Maj Awais Mazahir</strong></p>
               <p style={{ marginBottom: "2px", color: "#6b7280" }}>Officer in Charge — Design</p>
-              <p style={{ marginBottom: "2px", color: "#6b7280" }}>ARDIC (Advance Research, Development and Innovation Center)</p>
-              <p style={{ color: "#6b7280" }}>Wah Cantt, Pakistan</p>
+              <p style={{ marginBottom: "2px", color: "#6b7280" }}>ARDIC, Heavy Industries Taxila (HIT)</p>
+              <p style={{ color: "#6b7280" }}>Taxila, Pakistan</p>
             </div>
 
             <div style={{ borderTop: "1px solid #e8eaef", marginTop: "16px", paddingTop: "8px", color: "#9ca3af", fontSize: "10px" }}>
-              Generated {today} · AIMS Recoil Calculator · Values derived from Carlucci & Jacobson 3rd Ed., AMCP 706-342 §4-4
+              Generated {today}
             </div>
           </div>
         </div>
 
         <div style={{ color: "#c0c5d0", fontSize: "10px", letterSpacing: "0.05em", marginTop: "16px", textAlign: "center" }}>
-          AIMS · Autonomous Integrated Mortar System · ARDIC Wah Cantt · Carlucci & Jacobson 3rd Ed. · AMCP 706-342
+          AIMS · Autonomous Integrated Mortar System · ARDIC, HIT Taxila · Carlucci & Jacobson 3rd Ed. · AMCP 706-342
         </div>
       </div>
     </div>
