@@ -56,8 +56,10 @@ function computeRecoil(params) {
       Fshape = avgForce * (1.0 + 0.02 * Math.sin(progress * Math.PI * 6));
     }
 
+    const remainingEnergy = 0.5 * recoilMass * v * v;
+
     timeData.push({ t: t * 1000, F: Fshape / 1000 });
-    posData.push({ x: x * 1000, F: Fshape / 1000 });
+    posData.push({ x: x * 1000, F: Fshape / 1000, v: v, Er: remainingEnergy / 1000 });
 
     const a = Fshape / recoilMass;
     v = v - a * dt;
@@ -107,9 +109,11 @@ const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sa
 const MONO = "'SF Mono', 'Cascadia Code', 'Consolas', 'Liberation Mono', monospace";
 
 // ─── Chart (Canvas) ───────────────────────────────────────────────
-function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightLabel, highlightY2, highlightLabel2 }) {
+// overlays: [{ key, color, label, unit, dashPattern? }]
+function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightLabel, highlightY2, highlightLabel2, overlays }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
+  const hasOverlays = overlays && overlays.length > 0;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -128,7 +132,7 @@ function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightL
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
 
-    const pad = { top: 20, right: 20, bottom: 44, left: 62 };
+    const pad = { top: 20, right: hasOverlays ? 62 : 20, bottom: 44, left: 62 };
     const pw = W - pad.left - pad.right;
     const ph = H - pad.top - pad.bottom;
 
@@ -150,13 +154,14 @@ function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightL
     ctx.lineWidth = 1;
     ctx.strokeRect(pad.left, pad.top, pw, ph);
 
+    // Grid lines
     ctx.strokeStyle = "#f0f1f4";
     ctx.lineWidth = 1;
     const yTicks = 5;
     for (let i = 0; i <= yTicks; i++) {
       const val = yMin + (yMax - yMin) * i / yTicks;
       const y = sy(val);
-      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + pw, y); ctx.stroke();
       ctx.fillStyle = "#8892a4";
       ctx.font = "11px " + MONO;
       ctx.textAlign = "right";
@@ -173,23 +178,25 @@ function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightL
       ctx.fillText(val.toFixed(1), x, H - pad.bottom + 16);
     }
 
+    // Highlight lines
     const drawHighlight = (val, label, clr, side) => {
       if (!val) return;
       const hy = sy(val / 1000);
       ctx.strokeStyle = clr;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([6, 4]);
-      ctx.beginPath(); ctx.moveTo(pad.left, hy); ctx.lineTo(W - pad.right, hy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad.left, hy); ctx.lineTo(pad.left + pw, hy); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = clr;
       ctx.font = "bold 10px " + FONT;
       ctx.textAlign = side === "right" ? "right" : "left";
-      const xPos = side === "right" ? W - pad.right - 4 : pad.left + 4;
+      const xPos = side === "right" ? pad.left + pw - 4 : pad.left + 4;
       ctx.fillText(label || "", xPos, hy - 6);
     };
     drawHighlight(highlightY, highlightLabel, "#15803d", "left");
     drawHighlight(highlightY2, highlightLabel2, "#dc2626", "right");
 
+    // Primary data line (Force)
     ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
     ctx.lineJoin = "round";
@@ -201,6 +208,7 @@ function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightL
     });
     ctx.stroke();
 
+    // Area fill for primary
     ctx.globalAlpha = 0.08;
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -211,6 +219,57 @@ function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightL
     ctx.fill();
     ctx.globalAlpha = 1;
 
+    // ── Overlay series (right Y-axis) ──
+    if (hasOverlays) {
+      // Compute right-axis max: use max of all overlay values
+      let rMax = 0;
+      for (const ov of overlays) {
+        const ovMax = Math.max(...data.map(d => d[ov.key] || 0));
+        if (ovMax > rMax) rMax = ovMax;
+      }
+      rMax = rMax * 1.1 || 1;
+
+      const syR = v => pad.top + ph - ((v) / rMax) * ph;
+
+      // Right Y-axis ticks
+      for (let i = 0; i <= yTicks; i++) {
+        const val = rMax * i / yTicks;
+        const y = syR(val);
+        ctx.fillStyle = "#8892a4";
+        ctx.font = "11px " + MONO;
+        ctx.textAlign = "left";
+        ctx.fillText(val.toFixed(0), pad.left + pw + 8, y + 4);
+      }
+
+      // Draw each overlay line
+      for (const ov of overlays) {
+        ctx.strokeStyle = ov.color;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        ctx.setLineDash(ov.dashPattern || []);
+        ctx.beginPath();
+        data.forEach((d, i) => {
+          const px = sx(d[xKey]);
+          const py = syR(d[ov.key] || 0);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Right axis label — combine overlay labels
+      const rightLabel = overlays.map(ov => `${ov.label} (${ov.unit})`).join("  /  ");
+      ctx.fillStyle = "#5a6478";
+      ctx.font = "bold 10px " + FONT;
+      ctx.textAlign = "center";
+      ctx.save();
+      ctx.translate(W - 6, pad.top + ph / 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.fillText(rightLabel, 0, 0);
+      ctx.restore();
+    }
+
+    // Axis labels
     ctx.fillStyle = "#5a6478";
     ctx.font = "bold 11px " + FONT;
     ctx.textAlign = "center";
@@ -221,10 +280,35 @@ function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightL
     ctx.fillText(yLabel, 0, 0);
     ctx.restore();
 
-  }, [data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightLabel, highlightY2, highlightLabel2]);
+    // ── Legend (if overlays) ──
+    if (hasOverlays) {
+      const legendY = pad.top + 10;
+      let legendX = pad.left + 6;
+      const items = [{ label: yLabel, color: color, dash: false }, ...overlays.map(ov => ({ label: ov.label, color: ov.color, dash: !!ov.dashPattern }))];
+      ctx.font = "bold 10px " + FONT;
+      for (const item of items) {
+        // Line sample
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = 2;
+        if (item.dash) ctx.setLineDash([6, 3]);
+        else ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(legendX, legendY);
+        ctx.lineTo(legendX + 16, legendY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Label
+        ctx.fillStyle = item.color;
+        ctx.textAlign = "left";
+        ctx.fillText(item.label, legendX + 20, legendY + 4);
+        legendX += ctx.measureText(item.label).width + 36;
+      }
+    }
+
+  }, [data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightLabel, highlightY2, highlightLabel2, overlays, hasOverlays]);
 
   return (
-    <div ref={containerRef} style={{ width: "100%", height: "220px", borderRadius: "8px", overflow: "hidden", border: "1px solid #e2e5ea" }}>
+    <div ref={containerRef} style={{ width: "100%", height: hasOverlays ? "280px" : "220px", borderRadius: "8px", overflow: "hidden", border: "1px solid #e2e5ea" }}>
       <canvas ref={canvasRef} />
     </div>
   );
@@ -456,11 +540,15 @@ export default function AIMSRecoilCalculator() {
 
           <div style={{ height: "16px" }} />
 
-          <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px" }}>Force vs Stroke (Variable Orifice — Ideal)</div>
+          <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px" }}>Force, Velocity & Energy vs Stroke</div>
           {results.posData.length > 0 && (
             <Chart data={results.posData} xKey="x" yKey="F"
               xLabel="Stroke (mm)" yLabel="Force (kN)" color="#c2410c"
               highlightY={results.avgForce} highlightLabel={`Avg: ${avgKN.toFixed(0)} kN (${kNtoTf(avgKN)} tf)`}
+              overlays={[
+                { key: "v", color: "#0891b2", label: "Velocity", unit: "m/s", dashPattern: [8, 4] },
+                { key: "Er", color: "#d97706", label: "Remaining Energy", unit: "kJ", dashPattern: [4, 3] }
+              ]}
             />
           )}
 
