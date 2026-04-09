@@ -295,33 +295,36 @@ export default function AIMSRecoilCalculator() {
 
       <div style={{ maxWidth: "1440px", margin: "0 auto", padding: "20px 24px 32px" }}>
 
-        {/* ════════ ROW 1: Inputs + Key Results ════════ */}
-        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "20px", marginBottom: "20px" }}>
+        {/* ════════ ROW 1: Inputs (2 cols) + Results ════════ */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 3fr", gap: "20px", marginBottom: "20px" }}>
 
+          {/* ── Ballistic Inputs ── */}
           <div style={cardStyle}>
-            <h2 style={sectionHeading}>Inputs</h2>
-            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>Ballistic</div>
+            <h2 style={sectionHeading}>Ballistic</h2>
             <ParamSlider label="Projectile Mass" unit="kg" value={projMass} min={8} max={20} step={0.5} onChange={setProjMass} description="HE: ~13 kg · ER: ~16 kg" />
-            <ParamSlider label="Charge Mass" unit="kg" value={chargeMass} min={0.5} max={6} step={0.1} onChange={setChargeMass} description="Zone 0: ~0.5 kg · Zone 4: ~3.5 kg" />
-            <ParamSlider label="Muzzle Velocity" unit="m/s" value={muzzleVel} min={100} max={500} step={5} onChange={setMuzzleVel} description="Zone 0: ~150 · Zone 4: ~320 m/s" />
-            <ParamSlider label="Bore Time" unit="ms" value={boreTime} min={3} max={15} step={0.5} onChange={setBoreTime} />
+            <ParamSlider label="Charge Mass" unit="kg" value={chargeMass} min={0.5} max={6} step={0.1} onChange={setChargeMass} description="Zone 0: ~0.5 · Zone 4: ~3.5 kg" />
+            <ParamSlider label="Muzzle Velocity" unit="m/s" value={muzzleVel} min={100} max={500} step={5} onChange={setMuzzleVel} description="Zone 0: ~150 · Zone 4: ~320" />
+            <ParamSlider label="Bore Time" unit="ms" value={boreTime} min={3} max={15} step={0.5} onChange={setBoreTime} description="Projectile time in barrel" />
 
-            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px", marginTop: "16px" }}>Recoil System</div>
+            <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "10px 12px", marginTop: "8px" }}>
+              <div style={{ color: "#92400e", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px", fontWeight: 600 }}>Assumptions</div>
+              <div style={{ color: "#78716c", fontSize: "10px", lineHeight: 1.5 }}>
+                Variable-orifice brake · Peak/Avg 1.15:1 · Gas vel 1.5×V<sub>muz</sub> · MIL-PRF-46170 (ρ=860)
+              </div>
+            </div>
+          </div>
+
+          {/* ── Recoil System Inputs ── */}
+          <div style={cardStyle}>
+            <h2 style={sectionHeading}>Recoil System</h2>
             <ParamSlider label="Mortar Mass" unit="kg" value={mortarMass} min={50} max={250} step={5} onChange={setMortarMass} description="Complete mortar assembly" />
-            <ParamSlider label="Additional Mass" unit="kg" value={additionalMass} min={10} max={150} step={5} onChange={setAdditionalMass} description="Cradle + sliding parts + moving part of recoil mechanism" />
+            <ParamSlider label="Additional Mass" unit="kg" value={additionalMass} min={10} max={150} step={5} onChange={setAdditionalMass} description="Cradle + sliding + recoil mech" />
             <div style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: "6px", padding: "8px 12px", marginBottom: "18px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <span style={{ color: "#4338ca", fontSize: "12px", fontWeight: 600 }}>Recoiling Mass (M)</span>
               <span style={{ color: "#4338ca", fontSize: "16px", fontFamily: MONO, fontWeight: 700 }}>{recoilMass} <span style={{ fontSize: "11px", fontWeight: 400 }}>kg</span></span>
             </div>
             <ParamSlider label="Allowed Stroke" unit="mm" value={strokeLength} min={200} max={800} step={10} onChange={setStrokeLength} description="Buffer travel length" />
-            <ParamSlider label="Elevation Angle" unit="°" value={elevation} min={45} max={85} step={1} onChange={setElevation} description="Mortar tube elevation above horizontal" />
-
-            <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "10px 12px", marginTop: "12px" }}>
-              <div style={{ color: "#92400e", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px", fontWeight: 600 }}>Assumptions</div>
-              <div style={{ color: "#78716c", fontSize: "10.5px", lineHeight: 1.5 }}>
-                Variable-orifice brake · Peak/Avg 1.15:1 · Gas vel 1.5×V<sub>muz</sub> · MIL-PRF-46170 oil (ρ=860)
-              </div>
-            </div>
+            <ParamSlider label="Elevation Angle" unit="°" value={elevation} min={45} max={85} step={1} onChange={setElevation} description="Tube elevation above horizontal" />
           </div>
 
           <div style={cardStyle}>
