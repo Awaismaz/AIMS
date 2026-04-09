@@ -166,6 +166,67 @@ function StatCard({ label, value, unit, tonValue, accent, bg, formula }) {
   );
 }
 
+// ─── Password Gate ───────────────────────────────────────────────
+const ACCESS_HASH = "fde185d0"; // hash of AIMS2026
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(16).slice(0, 8);
+}
+
+function PasswordGate({ children }) {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem("aims-auth") === "1");
+  const [pwd, setPwd] = useState("");
+  const [error, setError] = useState(false);
+
+  if (authed) return children;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (simpleHash(pwd) === ACCESS_HASH) {
+      sessionStorage.setItem("aims-auth", "1");
+      setAuthed(true);
+    } else {
+      setError(true);
+      setPwd("");
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#f3f4f7", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT }}>
+      <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #dfe2e8", boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "40px 48px", textAlign: "center", maxWidth: "400px" }}>
+        <div style={{ background: "linear-gradient(135deg, #1e3a5f, #243b5c)", borderRadius: "8px", padding: "16px", marginBottom: "24px" }}>
+          <div style={{ color: "#fff", fontSize: "20px", fontWeight: 800 }}>AIMS Recoil Calculator</div>
+          <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", letterSpacing: "0.1em", marginTop: "4px" }}>RESTRICTED ACCESS</div>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="password"
+            value={pwd}
+            onChange={e => { setPwd(e.target.value); setError(false); }}
+            placeholder="Enter access code"
+            autoFocus
+            style={{
+              width: "100%", padding: "12px 16px", fontSize: "15px", fontFamily: MONO,
+              border: "2px solid " + (error ? "#ef4444" : "#dfe2e8"), borderRadius: "8px",
+              outline: "none", boxSizing: "border-box", marginBottom: "12px",
+              textAlign: "center", letterSpacing: "0.15em"
+            }}
+          />
+          {error && <div style={{ color: "#ef4444", fontSize: "12px", marginBottom: "8px" }}>Invalid access code</div>}
+          <button type="submit" style={{
+            width: "100%", padding: "12px", fontSize: "13px", fontWeight: 700,
+            background: "#1e3a5f", color: "#fff", border: "none", borderRadius: "8px",
+            cursor: "pointer", letterSpacing: "0.08em", fontFamily: FONT
+          }}>Access Dashboard</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────
 export default function AIMSRecoilCalculator() {
   const [projMass, setProjMass] = usePersistentParam("projMass", DEFAULTS.projMass);
@@ -278,7 +339,28 @@ export default function AIMSRecoilCalculator() {
   };
 
   return (
+    <PasswordGate>
     <div style={{ minHeight: "100vh", background: "#f3f4f7", color: "#1a202c", fontFamily: FONT }}>
+
+      <style>{`
+        .aims-row-top { display: grid; grid-template-columns: 1fr 1fr 3fr; gap: 20px; margin-bottom: 20px; }
+        .aims-row-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .aims-results-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+        .aims-results-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+        @media (max-width: 1100px) {
+          .aims-row-top { grid-template-columns: 1fr 1fr !important; }
+          .aims-results-grid4 { grid-template-columns: 1fr 1fr !important; }
+        }
+        @media (max-width: 768px) {
+          .aims-row-top { grid-template-columns: 1fr !important; }
+          .aims-row-charts { grid-template-columns: 1fr !important; }
+          .aims-results-grid3 { grid-template-columns: 1fr !important; }
+          .aims-results-grid4 { grid-template-columns: 1fr 1fr !important; }
+          .aims-heuristics-table td { display: block !important; border-right: none !important; }
+          .aims-heuristics-table tr { display: flex; flex-wrap: wrap; }
+          .aims-heuristics-table td { flex: 1 1 45%; min-width: 120px; }
+        }
+      `}</style>
 
       {/* Header */}
       <div style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a2e4a 60%, #243b5c 100%)", borderBottom: "3px solid #c9a84c", padding: "22px 32px 16px" }}>
@@ -296,7 +378,7 @@ export default function AIMSRecoilCalculator() {
       <div style={{ maxWidth: "1440px", margin: "0 auto", padding: "20px 24px 32px" }}>
 
         {/* ════════ ROW 1: Inputs (2 cols) + Results ════════ */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 3fr", gap: "20px", marginBottom: "20px" }}>
+        <div className="aims-row-top">
 
           {/* ── Ballistic Inputs ── */}
           <div style={cardStyle}>
@@ -330,7 +412,7 @@ export default function AIMSRecoilCalculator() {
           <div style={cardStyle}>
             <h2 style={sectionHeading}>Results</h2>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
+            <div className="aims-results-grid3">
               <StatCard label="Recoil Impulse" value={results.impulse.toFixed(0)} unit="N·s" accent="#1e40af"
                 formula={<>I = m<sub>p</sub>V + m<sub>c</sub>·1.5V</>} />
               <StatCard label="Free Recoil Velocity" value={results.V0.toFixed(1)} unit="m/s" accent="#1e40af"
@@ -339,7 +421,7 @@ export default function AIMSRecoilCalculator() {
                 formula={<>E = ½MV<sub>0</sub>²</>} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+            <div className="aims-results-grid4">
               <StatCard label="Rigid Force (no buffer)" value={rigidKN.toFixed(0)} unit="kN" accent="#dc2626" tonValue={kNtoTon(rigidKN)} bg="#fef2f2"
                 formula={<>F = I / τ</>} />
               <StatCard label="Avg Buffered Force" value={avgKN.toFixed(1)} unit="kN" accent="#15803d" tonValue={kNtoTon(avgKN)}
@@ -389,7 +471,7 @@ export default function AIMSRecoilCalculator() {
             {/* Heuristics */}
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px" }}>Buffer Cylinder Heuristics</div>
             <div style={{ background: "#f8f9fb", border: "1px solid #e8eaef", borderRadius: "8px", overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: FONT }}>
+              <table className="aims-heuristics-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: FONT }}>
                 <tbody>
                   <tr>
                     {[
@@ -426,7 +508,7 @@ export default function AIMSRecoilCalculator() {
         </div>
 
         {/* ════════ ROW 2: Force Charts ════════ */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+        <div className="aims-row-charts">
           <div style={cardStyle}>
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Force vs Time (Ideal Variable-Orifice)</div>
             <HighchartsReact highcharts={Highcharts} options={forceTimeOptions} />
@@ -438,7 +520,7 @@ export default function AIMSRecoilCalculator() {
         </div>
 
         {/* ════════ ROW 3: Velocity + Energy Charts ════════ */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+        <div className="aims-row-charts">
           <div style={cardStyle}>
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Recoil Velocity vs Stroke</div>
             <HighchartsReact highcharts={Highcharts} options={velocityStrokeOptions} />
@@ -550,5 +632,6 @@ export default function AIMSRecoilCalculator() {
         </div>
       </div>
     </div>
+    </PasswordGate>
   );
 }
