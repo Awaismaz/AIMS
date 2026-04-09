@@ -373,7 +373,6 @@ export default function AIMSRecoilCalculator() {
   const [muzzleVel, setMuzzleVel] = useState(320);
   const [boreTime, setBoreTime] = useState(8);
   const [recoilMass, setRecoilMass] = useState(120);
-  const [mortarMass, setMortarMass] = useState(280);
   const [strokeLength, setStrokeLength] = useState(500);
 
   const results = useMemo(() => computeRecoil({
@@ -436,8 +435,7 @@ export default function AIMSRecoilCalculator() {
           <ParamSlider label="Bore Time" unit="ms" value={boreTime} min={3} max={15} step={0.5} onChange={setBoreTime} description="Time projectile spends in barrel" />
 
           <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "12px", marginTop: "24px" }}>Recoil System Parameters</div>
-          <ParamSlider label="Mortar Mass (Complete)" unit="kg" value={mortarMass} min={100} max={600} step={5} onChange={setMortarMass} description="Complete weapon system mass (barrel + mount + baseplate)" />
-          <ParamSlider label="Recoiling Mass" unit="kg" value={recoilMass} min={50} max={300} step={5} onChange={setRecoilMass} description="Barrel + cradle + sliding parts only" />
+          <ParamSlider label="Recoiling Mass" unit="kg" value={recoilMass} min={50} max={300} step={5} onChange={setRecoilMass} description="Barrel + cradle + sliding parts" />
           <ParamSlider label="Allowed Stroke" unit="mm" value={strokeLength} min={200} max={800} step={10} onChange={setStrokeLength} description="Buffer travel length for RFQ" />
 
           {/* Assumptions box */}
@@ -562,7 +560,6 @@ export default function AIMSRecoilCalculator() {
               <div>Target avg braking force: <strong style={{ color: "#15803d" }}>{avgKN.toFixed(1)} kN ({kNtoTf(avgKN)} tf)</strong></div>
               <div>Max braking force: <strong style={{ color: "#c2410c" }}>{peakKN.toFixed(1)} kN ({kNtoTf(peakKN)} tf)</strong></div>
               <div>Recoil impulse: <strong style={{ color: "#1e40af" }}>{results.impulse.toFixed(0)} N·s</strong></div>
-              <div>Mortar mass (complete): <strong style={{ color: "#1e3a5f" }}>{mortarMass} kg</strong></div>
               <div>Recoiling mass: <strong style={{ color: "#1e40af" }}>{recoilMass} kg</strong></div>
               <div>Bore: <strong style={{ color: "#1e3a5f" }}>120 mm smooth-bore mortar</strong></div>
               <div>Type: <strong style={{ color: "#1e3a5f" }}>Variable-orifice hydraulic, with return accumulator</strong></div>
