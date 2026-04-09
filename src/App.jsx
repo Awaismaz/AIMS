@@ -19,8 +19,9 @@ function saveParams(params) {
 }
 
 const DEFAULTS = {
-  projMass: 16, chargeMass: 2.8, muzzleVel: 320,
-  boreTime: 8, recoilMass: 120, strokeLength: 500, elevation: 70
+  projMass: 15.9, chargeMass: 2.8, muzzleVel: 272,
+  boreTime: 8, mortarMass: 100, additionalMass: 50,
+  strokeLength: 500, elevation: 85
 };
 
 function usePersistentParam(key, fallback) {
@@ -154,24 +155,29 @@ function StatCard({ label, value, unit, tonValue, accent, bg, formula }) {
       borderRadius: "8px", padding: "12px 14px"
     }}>
       <div style={{ color: "#8892a4", fontSize: "10px", fontFamily: FONT, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>{label}</div>
-      <div style={{ color: accent || "#1a202c", fontSize: "20px", fontFamily: MONO, fontWeight: 700 }}>
-        {value} <span style={{ fontSize: "11px", color: "#a0a8b8", fontWeight: 400 }}>{unit}</span>
+      <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "6px" }}>
+        <span style={{ color: accent || "#1a202c", fontSize: "20px", fontFamily: MONO, fontWeight: 700 }}>
+          {value} <span style={{ fontSize: "11px", color: "#a0a8b8", fontWeight: 400 }}>{unit}</span>
+        </span>
+        {formula && <span style={{ color: "#4a5568", fontSize: "15px", fontFamily: MONO, fontWeight: 700 }}>[{formula}]</span>}
       </div>
       {tonValue && <div style={{ color: "#6b7280", fontSize: "12px", fontFamily: MONO, fontWeight: 500, marginTop: "2px" }}>({tonValue} ton)</div>}
-      {formula && <div style={{ color: "#a0a8b8", fontSize: "10px", fontFamily: MONO, marginTop: "4px", fontStyle: "italic" }}>{formula}</div>}
     </div>
   );
 }
 
 // ─── Main App ─────────────────────────────────────────────────────
 export default function AIMSRecoilCalculator() {
-  const [projMass, setProjMass] = usePersistentParam("projMass", 16);
-  const [chargeMass, setChargeMass] = usePersistentParam("chargeMass", 2.8);
-  const [muzzleVel, setMuzzleVel] = usePersistentParam("muzzleVel", 320);
-  const [boreTime, setBoreTime] = usePersistentParam("boreTime", 8);
-  const [recoilMass, setRecoilMass] = usePersistentParam("recoilMass", 120);
-  const [strokeLength, setStrokeLength] = usePersistentParam("strokeLength", 500);
-  const [elevation, setElevation] = usePersistentParam("elevation", 70);
+  const [projMass, setProjMass] = usePersistentParam("projMass", DEFAULTS.projMass);
+  const [chargeMass, setChargeMass] = usePersistentParam("chargeMass", DEFAULTS.chargeMass);
+  const [muzzleVel, setMuzzleVel] = usePersistentParam("muzzleVel", DEFAULTS.muzzleVel);
+  const [boreTime, setBoreTime] = usePersistentParam("boreTime", DEFAULTS.boreTime);
+  const [mortarMass, setMortarMass] = usePersistentParam("mortarMass", DEFAULTS.mortarMass);
+  const [additionalMass, setAdditionalMass] = usePersistentParam("additionalMass", DEFAULTS.additionalMass);
+  const [strokeLength, setStrokeLength] = usePersistentParam("strokeLength", DEFAULTS.strokeLength);
+  const [elevation, setElevation] = usePersistentParam("elevation", DEFAULTS.elevation);
+
+  const recoilMass = mortarMass + additionalMass;
 
   const results = useMemo(() => computeRecoil({
     projMass, chargeMass, muzzleVel,
@@ -301,7 +307,12 @@ export default function AIMSRecoilCalculator() {
             <ParamSlider label="Bore Time" unit="ms" value={boreTime} min={3} max={15} step={0.5} onChange={setBoreTime} />
 
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px", marginTop: "16px" }}>Recoil System</div>
-            <ParamSlider label="Recoiling Mass" unit="kg" value={recoilMass} min={50} max={300} step={5} onChange={setRecoilMass} description="Barrel + cradle + sliding parts" />
+            <ParamSlider label="Mortar Mass" unit="kg" value={mortarMass} min={50} max={250} step={5} onChange={setMortarMass} description="Complete mortar assembly" />
+            <ParamSlider label="Additional Mass" unit="kg" value={additionalMass} min={10} max={150} step={5} onChange={setAdditionalMass} description="Cradle + sliding parts + moving part of recoil mechanism" />
+            <div style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: "6px", padding: "8px 12px", marginBottom: "18px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ color: "#4338ca", fontSize: "12px", fontWeight: 600 }}>Recoiling Mass (M)</span>
+              <span style={{ color: "#4338ca", fontSize: "16px", fontFamily: MONO, fontWeight: 700 }}>{recoilMass} <span style={{ fontSize: "11px", fontWeight: 400 }}>kg</span></span>
+            </div>
             <ParamSlider label="Allowed Stroke" unit="mm" value={strokeLength} min={200} max={800} step={10} onChange={setStrokeLength} description="Buffer travel length" />
             <ParamSlider label="Elevation Angle" unit="°" value={elevation} min={45} max={85} step={1} onChange={setElevation} description="Mortar tube elevation above horizontal" />
 
@@ -318,27 +329,29 @@ export default function AIMSRecoilCalculator() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
               <StatCard label="Recoil Impulse" value={results.impulse.toFixed(0)} unit="N·s" accent="#1e40af"
-                formula={`I = m_p·V + m_c·1.5·V`} />
+                formula={<>I = m<sub>p</sub>V + m<sub>c</sub>·1.5V</>} />
               <StatCard label="Free Recoil Velocity" value={results.V0.toFixed(1)} unit="m/s" accent="#1e40af"
-                formula={`V₀ = I / M`} />
+                formula={<>V<sub>0</sub> = I / M</>} />
               <StatCard label="Recoil Energy" value={(results.recoilEnergy / 1000).toFixed(1)} unit="kJ" accent="#b45309"
-                formula={`E = ½·M·V₀²`} />
+                formula={<>E = ½MV<sub>0</sub>²</>} />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
               <StatCard label="Rigid Force (no buffer)" value={rigidKN.toFixed(0)} unit="kN" accent="#dc2626" tonValue={kNtoTon(rigidKN)} bg="#fef2f2"
-                formula={`F = I / τ`} />
+                formula={<>F = I / τ</>} />
               <StatCard label="Avg Buffered Force" value={avgKN.toFixed(1)} unit="kN" accent="#15803d" tonValue={kNtoTon(avgKN)}
-                formula={`F_avg = E / s`} />
+                formula={<>F<sub>avg</sub> = E / s</>} />
               <StatCard label="Peak Buffered Force" value={peakKN.toFixed(1)} unit="kN" accent="#c2410c" tonValue={kNtoTon(peakKN)}
-                formula={`F_peak = 1.15 × F_avg`} />
+                formula={<>F<sub>peak</sub> = 1.15 × F<sub>avg</sub></>} />
               <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 14px" }}>
                 <div style={{ color: "#8892a4", fontSize: "10px", fontFamily: FONT, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>Force Reduction</div>
-                <div style={{ color: "#16a34a", fontSize: "20px", fontFamily: MONO, fontWeight: 700 }}>
-                  {results.forceReduction.toFixed(1)}<span style={{ fontSize: "12px" }}>%</span>
+                <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "6px" }}>
+                  <span style={{ color: "#16a34a", fontSize: "20px", fontFamily: MONO, fontWeight: 700 }}>
+                    {results.forceReduction.toFixed(1)}<span style={{ fontSize: "12px" }}>%</span>
+                  </span>
+                  <span style={{ color: "#4a5568", fontSize: "14px", fontFamily: MONO, fontWeight: 600 }}>[(F<sub>rigid</sub> − F<sub>peak</sub>) / F<sub>rigid</sub>]</span>
                 </div>
                 <div style={{ color: "#9ca3af", fontSize: "10px", marginTop: "2px" }}>Duration: {(results.recoilTime * 1000).toFixed(1)} ms</div>
-                <div style={{ color: "#a0a8b8", fontSize: "10px", fontFamily: MONO, marginTop: "4px", fontStyle: "italic" }}>(F_rigid − F_peak) / F_rigid</div>
               </div>
             </div>
 
@@ -470,7 +483,7 @@ export default function AIMSRecoilCalculator() {
             <p>Dear Sir/Madam,</p>
 
             <p>
-              We are writing from <strong>ARDIC (Advance Research, Development and Innovation Center)</strong>, Heavy Industries Taxila (HIT), Taxila, Pakistan. We are currently sourcing an <strong>industrial-grade heavy-duty hydraulic recoil brake</strong> for an internal R&D application involving high-impulse repetitive loading.
+              We are writing from <strong>MHIL (Margalla Heavy Industries Limited)</strong>, Taxila, Pakistan. We are currently sourcing an <strong>industrial-grade heavy-duty hydraulic recoil brake</strong> for an R&D application involving high-impulse repetitive loading.
             </p>
 
             <p>
@@ -484,7 +497,7 @@ export default function AIMSRecoilCalculator() {
                   ["Energy per Cycle", `${(results.recoilEnergy / 1000).toFixed(1)} kJ`],
                   ["Peak Input Velocity", `${results.V0.toFixed(1)} m/s`],
                   ["Stroke (Travel)", "400–500 mm preferred"],
-                  ["Recoiling Mass", `${recoilMass} kg`],
+                  ["Moving Mass", `${recoilMass} kg`],
                   ["Force Profile", "Constant force / near-constant (variable-orifice type preferred)"],
                   ["Return Mechanism", "Required — spring or gas-assisted (must fully reset between cycles)"],
                   ["Duty Cycle", "Repetitive impulse, up to 6–8 cycles per minute"],
@@ -517,9 +530,9 @@ export default function AIMSRecoilCalculator() {
 
             <div style={{ marginTop: "24px" }}>
               <p style={{ marginBottom: "4px" }}>Best regards,</p>
-              <p style={{ marginBottom: "2px" }}><strong>Maj Awais Mazahir</strong></p>
-              <p style={{ marginBottom: "2px", color: "#6b7280" }}>Officer in Charge — Design</p>
-              <p style={{ marginBottom: "2px", color: "#6b7280" }}>ARDIC, Heavy Industries Taxila (HIT)</p>
+              <p style={{ marginBottom: "2px" }}><strong>Awais Mazahir</strong></p>
+              <p style={{ marginBottom: "2px", color: "#6b7280" }}>Design Department</p>
+              <p style={{ marginBottom: "2px", color: "#6b7280" }}>MHIL (Margalla Heavy Industries Limited)</p>
               <p style={{ color: "#6b7280" }}>Taxila, Pakistan</p>
             </div>
 
@@ -530,7 +543,7 @@ export default function AIMSRecoilCalculator() {
         </div>
 
         <div style={{ color: "#c0c5d0", fontSize: "10px", letterSpacing: "0.05em", marginTop: "16px", textAlign: "center" }}>
-          AIMS · Autonomous Integrated Mortar System · ARDIC, HIT Taxila · Carlucci & Jacobson 3rd Ed. · AMCP 706-342
+          AIMS Recoil Calculator · Carlucci & Jacobson 3rd Ed. · AMCP 706-342 · Rheinmetall Handbook
         </div>
       </div>
     </div>
