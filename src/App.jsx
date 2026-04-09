@@ -360,6 +360,9 @@ export default function AIMSRecoilCalculator() {
           .aims-heuristics-table tr { display: flex; flex-wrap: wrap; }
           .aims-heuristics-table td { flex: 1 1 45%; min-width: 120px; }
         }
+        html, body { overflow-x: hidden; }
+        .highcharts-container, .highcharts-root { max-width: 100% !important; }
+        .aims-chart-card { overflow: hidden; min-width: 0; }
       `}</style>
 
       {/* Header */}
@@ -509,25 +512,25 @@ export default function AIMSRecoilCalculator() {
 
         {/* ════════ ROW 2: Force Charts ════════ */}
         <div className="aims-row-charts">
-          <div style={cardStyle}>
+          <div className="aims-chart-card" style={cardStyle}>
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Force vs Time (Ideal Variable-Orifice)</div>
-            <HighchartsReact highcharts={Highcharts} options={forceTimeOptions} />
+            <HighchartsReact highcharts={Highcharts} options={forceTimeOptions} containerProps={{ style: { width: "100%", maxWidth: "100%" } }} />
           </div>
-          <div style={cardStyle}>
+          <div className="aims-chart-card" style={cardStyle}>
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Force vs Stroke</div>
-            <HighchartsReact highcharts={Highcharts} options={forceStrokeOptions} />
+            <HighchartsReact highcharts={Highcharts} options={forceStrokeOptions} containerProps={{ style: { width: "100%", maxWidth: "100%" } }} />
           </div>
         </div>
 
         {/* ════════ ROW 3: Velocity + Energy Charts ════════ */}
         <div className="aims-row-charts">
-          <div style={cardStyle}>
+          <div className="aims-chart-card" style={cardStyle}>
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Recoil Velocity vs Stroke</div>
-            <HighchartsReact highcharts={Highcharts} options={velocityStrokeOptions} />
+            <HighchartsReact highcharts={Highcharts} options={velocityStrokeOptions} containerProps={{ style: { width: "100%", maxWidth: "100%" } }} />
           </div>
-          <div style={cardStyle}>
+          <div className="aims-chart-card" style={cardStyle}>
             <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Remaining Kinetic Energy vs Stroke</div>
-            <HighchartsReact highcharts={Highcharts} options={energyStrokeOptions} />
+            <HighchartsReact highcharts={Highcharts} options={energyStrokeOptions} containerProps={{ style: { width: "100%", maxWidth: "100%" } }} />
           </div>
         </div>
 
