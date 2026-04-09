@@ -1,8 +1,39 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Highcharts from "highcharts";
 import { HighchartsReact } from "highcharts-react-official";
 
 const kNtoTon = (kN) => (kN / 9.80665).toFixed(1);
+
+// ─── Persistent state via localStorage ────────────────────────────
+const STORAGE_KEY = "aims-recoil-params";
+
+function loadParams() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveParams(params) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(params)); } catch {}
+}
+
+const DEFAULTS = {
+  projMass: 16, chargeMass: 2.8, muzzleVel: 320,
+  boreTime: 8, recoilMass: 120, strokeLength: 500, elevation: 70
+};
+
+function usePersistentParam(key, fallback) {
+  const saved = loadParams();
+  const [val, setVal] = useState(saved && saved[key] != null ? saved[key] : fallback);
+  const setter = useCallback((v) => {
+    setVal(v);
+    const current = loadParams() || { ...DEFAULTS };
+    current[key] = v;
+    saveParams(current);
+  }, [key]);
+  return [val, setter];
+}
 
 // ─── Physics Engine ───────────────────────────────────────────────
 function computeRecoil(params) {
@@ -134,13 +165,13 @@ function StatCard({ label, value, unit, tonValue, accent, bg, formula }) {
 
 // ─── Main App ─────────────────────────────────────────────────────
 export default function AIMSRecoilCalculator() {
-  const [projMass, setProjMass] = useState(16);
-  const [chargeMass, setChargeMass] = useState(2.8);
-  const [muzzleVel, setMuzzleVel] = useState(320);
-  const [boreTime, setBoreTime] = useState(8);
-  const [recoilMass, setRecoilMass] = useState(120);
-  const [strokeLength, setStrokeLength] = useState(500);
-  const [elevation, setElevation] = useState(70);
+  const [projMass, setProjMass] = usePersistentParam("projMass", 16);
+  const [chargeMass, setChargeMass] = usePersistentParam("chargeMass", 2.8);
+  const [muzzleVel, setMuzzleVel] = usePersistentParam("muzzleVel", 320);
+  const [boreTime, setBoreTime] = usePersistentParam("boreTime", 8);
+  const [recoilMass, setRecoilMass] = usePersistentParam("recoilMass", 120);
+  const [strokeLength, setStrokeLength] = usePersistentParam("strokeLength", 500);
+  const [elevation, setElevation] = usePersistentParam("elevation", 70);
 
   const results = useMemo(() => computeRecoil({
     projMass, chargeMass, muzzleVel,
