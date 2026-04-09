@@ -1,0 +1,200 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - heading "AIMS Recoil Calculator" [level=1] [ref=e7]
+      - generic [ref=e8]: 120MM SMOOTH-BORE MORTAR · VARIABLE-ORIFICE BUFFER SIZING
+    - generic [ref=e9]: "Ref: Carlucci & Jacobson Ch.15 · AMCP 706-342 §4-4 · Rheinmetall Handbook §9.3 · Assumes ideal variable-orifice design"
+  - generic [ref=e10]:
+    - generic [ref=e11]:
+      - heading "① Independent Variables" [level=2] [ref=e12]
+      - generic [ref=e13]: Ballistic Parameters
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Projectile Mass
+          - generic [ref=e17]: 16.0 kg
+        - generic [ref=e18]: "HE bomb: ~13 kg · Extended range: ~16 kg"
+        - slider [ref=e21] [cursor=pointer]: "16"
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]: Charge Mass
+          - generic [ref=e25]: 2.8 kg
+        - generic [ref=e26]: "Zone 0: ~0.5 kg · Zone 4: ~3.5 kg"
+        - slider [ref=e29] [cursor=pointer]: "2.8"
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: Muzzle Velocity
+          - generic [ref=e33]: 320 m/s
+        - generic [ref=e34]: "Zone 0: ~150 m/s · Zone 4: ~320 m/s"
+        - slider [ref=e37] [cursor=pointer]: "320"
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: Bore Time
+          - generic [ref=e41]: 8.0 ms
+        - generic [ref=e42]: Time projectile spends in barrel
+        - slider [ref=e45] [cursor=pointer]: "8"
+      - generic [ref=e46]: Recoil System Parameters
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - generic [ref=e49]: Recoiling Mass
+          - generic [ref=e50]: 120 kg
+        - generic [ref=e51]: Barrel + cradle + sliding parts
+        - slider [ref=e54] [cursor=pointer]: "120"
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - generic [ref=e57]: Allowed Stroke
+          - generic [ref=e58]: 500 mm
+        - generic [ref=e59]: Buffer travel length for RFQ
+        - slider [ref=e62] [cursor=pointer]: "500"
+      - generic [ref=e63]:
+        - generic [ref=e64]: Model Assumptions
+        - generic [ref=e65]:
+          - generic [ref=e66]: • Variable-orifice hydraulic brake
+          - generic [ref=e67]: • Near-constant force profile (AMCP 706-342 §4-4)
+          - generic [ref=e68]: "• Peak/Avg ratio: 1.15:1 (well-designed system)"
+          - generic [ref=e69]: "• Gas velocity: 1.5 × muzzle vel (Rheinmetall §9.1)"
+          - generic [ref=e70]: "• Recoil oil: MIL-PRF-46170 (ρ = 860 kg/m³)"
+    - generic [ref=e71]:
+      - heading "② Dependent Variables" [level=2] [ref=e72]
+      - generic [ref=e73]: Momentum & Energy
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - text: Recoil Impulse (I
+          - subscript [ref=e76]: r
+          - text: )
+        - generic [ref=e77]: 6464 N·s
+      - generic [ref=e78]:
+        - generic [ref=e79]: Free Recoil Velocity (V₀)
+        - generic [ref=e80]: 53.9 m/s
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - text: Recoil Energy (E
+          - subscript [ref=e83]: r
+          - text: )
+        - generic [ref=e84]: 174.1 kJ
+      - generic [ref=e85]:
+        - generic [ref=e86]: Mortar Reaction Force (Rigid Mount)
+        - generic [ref=e87]:
+          - text: 808 kN
+          - generic [ref=e88]: (82.4 tf)
+        - generic [ref=e89]: F = I / τ = 6464 / 8.0ms
+      - generic [ref=e90]:
+        - generic [ref=e91]:
+          - text: Average Force (F
+          - subscript [ref=e92]: avg
+          - text: )
+        - generic [ref=e93]:
+          - text: 348.2 kN
+          - generic [ref=e94]: (35.5 tf)
+      - generic [ref=e95]:
+        - generic [ref=e96]: Peak Force (1.15 × avg)
+        - generic [ref=e97]:
+          - text: 400.4 kN
+          - generic [ref=e98]: (40.8 tf)
+      - generic [ref=e99]:
+        - generic [ref=e100]: Recoil Duration
+        - generic [ref=e101]: 18.6 ms
+      - generic [ref=e102]:
+        - generic [ref=e103]: Force Reduction vs Rigid
+        - generic [ref=e104]: 50.4 %
+        - generic [ref=e105]: 808 kN (82.4 tf) → 400.4 kN (40.8 tf) peak
+      - generic [ref=e106]: Design Heuristics
+      - generic [ref=e107]:
+        - generic [ref=e108]:
+          - generic [ref=e109]:
+            - text: Piston Area (Ap)
+            - generic [ref=e110]: Sized for ~25 MPa working pressure
+          - generic [ref=e111]: 139.3 cm²
+        - generic [ref=e112]:
+          - generic [ref=e113]:
+            - text: Bore Diameter
+            - generic [ref=e114]: √(4·Ap / π)
+          - generic [ref=e115]: 133 mm
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - text: Max Orifice Area (Ao)
+            - generic [ref=e118]: At V₀, start of stroke (AMCP 706-342)
+          - generic [ref=e119]: 376.64 cm²
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - text: Orifice Ratio (Ao/Ap)
+            - generic [ref=e122]: Varies along stroke for const. force
+          - generic [ref=e123]: 270.4 %
+        - generic [ref=e124]:
+          - generic [ref=e125]:
+            - text: Rod Diameter
+            - generic [ref=e126]: ~0.55 × bore (Rheinmetall §9.3)
+          - generic [ref=e127]: 73 mm
+        - generic [ref=e128]:
+          - generic [ref=e129]:
+            - text: Est. Overall Length
+            - generic [ref=e130]: ~2.5 × stroke (incl. seals + accumulator)
+          - generic [ref=e131]: 1250 mm
+        - generic [ref=e132]:
+          - generic [ref=e133]:
+            - text: Fluid Displaced
+            - generic [ref=e134]: Ap × stroke
+          - generic [ref=e135]: 6964 cm³
+        - generic [ref=e136]:
+          - generic [ref=e137]:
+            - text: Working Pressure
+            - generic [ref=e138]: Plateau to peak range
+          - generic [ref=e139]: 21–29 MPa
+        - generic [ref=e140]:
+          - generic [ref=e141]:
+            - text: Discharge Coeff (Cd)
+            - generic [ref=e142]: Sharp-edged orifice assumption
+          - generic [ref=e143]: "0.70"
+    - generic [ref=e144]:
+      - heading "③ Results" [level=2] [ref=e145]
+      - generic [ref=e146]:
+        - generic [ref=e147]:
+          - generic [ref=e148]: Recoil Energy
+          - generic [ref=e149]: 174.1 kJ
+        - generic [ref=e150]:
+          - generic [ref=e151]: Peak Force
+          - generic [ref=e152]:
+            - text: 400.4 kN
+            - generic [ref=e153]: (40.8 tf)
+        - generic [ref=e154]:
+          - generic [ref=e155]: Avg Force
+          - generic [ref=e156]:
+            - text: 348.2 kN
+            - generic [ref=e157]: (35.5 tf)
+        - generic [ref=e158]:
+          - generic [ref=e159]: Rigid Force
+          - generic [ref=e160]:
+            - text: 808 kN
+            - generic [ref=e161]: (82.4 tf)
+      - generic [ref=e162]: Force vs Time (Variable Orifice — Ideal)
+      - generic [ref=e166]: Force, Velocity & Energy vs Stroke
+      - generic [ref=e169]:
+        - generic [ref=e170]: RFQ Specification Summary
+        - generic [ref=e171]:
+          - generic [ref=e172]:
+            - text: "Energy per cycle:"
+            - strong [ref=e173]: 174.1 kJ
+          - generic [ref=e174]:
+            - text: "Required stroke:"
+            - strong [ref=e175]: 500 mm
+          - generic [ref=e176]:
+            - text: "Peak input velocity:"
+            - strong [ref=e177]: 53.9 m/s
+          - generic [ref=e178]:
+            - text: "Target avg braking force:"
+            - strong [ref=e179]: 348.2 kN (35.5 tf)
+          - generic [ref=e180]:
+            - text: "Max braking force:"
+            - strong [ref=e181]: 400.4 kN (40.8 tf)
+          - generic [ref=e182]:
+            - text: "Recoil impulse:"
+            - strong [ref=e183]: 6464 N·s
+          - generic [ref=e184]:
+            - text: "Recoiling mass:"
+            - strong [ref=e185]: 120 kg
+          - generic [ref=e186]:
+            - text: "Bore:"
+            - strong [ref=e187]: 120 mm smooth-bore mortar
+          - generic [ref=e188]:
+            - text: "Type:"
+            - strong [ref=e189]: Variable-orifice hydraulic, with return accumulator
+  - generic [ref=e190]: AIMS · Autonomous Integrated Mortar System · ARDIC Wah Cantt · Variable-Orifice Model · Carlucci & Jacobson 3rd Ed. · AMCP 706-342

@@ -1,7 +1,9 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
+import Highcharts from "highcharts";
+import { HighchartsReact } from "highcharts-react-official";
 
 // kN to metric ton-force
-const kNtoTf = (kN) => (kN / 9.80665).toFixed(1);
+const kNtoTon = (kN) => (kN / 9.80665).toFixed(1);
 
 // ─── Physics Engine ───────────────────────────────────────────────
 function computeRecoil(params) {
@@ -12,23 +14,14 @@ function computeRecoil(params) {
   const V0 = impulse / recoilMass;
   const recoilEnergy = 0.5 * recoilMass * V0 * V0;
 
-  // Rigid case (no recoil system)
   const rigidForce = impulse / boreTime;
-
-  // Variable-orifice ideal design: avg force from work-energy theorem
   const avgForce = recoilEnergy / strokeLength;
 
-  // Well-designed variable orifice: peak ≈ 1.12–1.18× avg (AMCP 706-342 §4-4)
   const peakToAvg = 1.15;
   const peakForce = avgForce * peakToAvg;
-
-  // Recoil duration: approximate from avg deceleration
   const recoilTime = (recoilMass * V0) / avgForce;
-
-  // Force reduction vs rigid
   const forceReduction = ((rigidForce - peakForce) / rigidForce) * 100;
 
-  // ── Generate ideal variable-orifice force profiles ──
   const dt = 0.0001;
   const steps = Math.ceil(recoilTime / dt) + 1;
 
@@ -58,8 +51,13 @@ function computeRecoil(params) {
 
     const remainingEnergy = 0.5 * recoilMass * v * v;
 
-    timeData.push({ t: t * 1000, F: Fshape / 1000 });
-    posData.push({ x: x * 1000, F: Fshape / 1000, v: v, Er: remainingEnergy / 1000 });
+    timeData.push([parseFloat((t * 1000).toFixed(2)), parseFloat((Fshape / 1000).toFixed(2))]);
+    posData.push({
+      x: parseFloat((x * 1000).toFixed(1)),
+      F: parseFloat((Fshape / 1000).toFixed(2)),
+      v: parseFloat(v.toFixed(2)),
+      Er: parseFloat((remainingEnergy / 1000).toFixed(2))
+    });
 
     const a = Fshape / recoilMass;
     v = v - a * dt;
@@ -67,7 +65,6 @@ function computeRecoil(params) {
     if (v < 0) v = 0;
   }
 
-  // ── Heuristics for cylinder design ──
   const targetPressure = 25e6;
   const idealPistonArea = avgForce / targetPressure;
   const idealPistonAreaCm2 = idealPistonArea * 1e4;
@@ -108,217 +105,11 @@ function computeRecoil(params) {
 const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const MONO = "'SF Mono', 'Cascadia Code', 'Consolas', 'Liberation Mono', monospace";
 
-// ─── Chart (Canvas) ───────────────────────────────────────────────
-// overlays: [{ key, color, label, unit, dashPattern? }]
-function Chart({ data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightLabel, highlightY2, highlightLabel2, overlays }) {
-  const canvasRef = useRef(null);
-  const containerRef = useRef(null);
-  const hasOverlays = overlays && overlays.length > 0;
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container || data.length === 0) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = container.getBoundingClientRect();
-    const W = rect.width;
-    const H = rect.height;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W + "px";
-    canvas.style.height = H + "px";
-
-    const ctx = canvas.getContext("2d");
-    ctx.scale(dpr, dpr);
-
-    const pad = { top: 20, right: hasOverlays ? 62 : 20, bottom: 44, left: 62 };
-    const pw = W - pad.left - pad.right;
-    const ph = H - pad.top - pad.bottom;
-
-    const xs = data.map(d => d[xKey]);
-    const ys = data.map(d => d[yKey]);
-    const xMin = 0;
-    const xMax = Math.max(...xs) * 1.05 || 1;
-    const maxHighlight = Math.max(highlightY || 0, highlightY2 || 0) / 1000;
-    const yMin = 0;
-    const yMax = Math.max(...ys, maxHighlight) * 1.15 || 1;
-
-    const sx = v => pad.left + ((v - xMin) / (xMax - xMin)) * pw;
-    const sy = v => pad.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, W, H);
-
-    ctx.strokeStyle = "#e2e5ea";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(pad.left, pad.top, pw, ph);
-
-    // Grid lines
-    ctx.strokeStyle = "#f0f1f4";
-    ctx.lineWidth = 1;
-    const yTicks = 5;
-    for (let i = 0; i <= yTicks; i++) {
-      const val = yMin + (yMax - yMin) * i / yTicks;
-      const y = sy(val);
-      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + pw, y); ctx.stroke();
-      ctx.fillStyle = "#8892a4";
-      ctx.font = "11px " + MONO;
-      ctx.textAlign = "right";
-      ctx.fillText(val.toFixed(0), pad.left - 8, y + 4);
-    }
-    const xTicks = 5;
-    for (let i = 0; i <= xTicks; i++) {
-      const val = xMin + (xMax - xMin) * i / xTicks;
-      const x = sx(val);
-      ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + ph); ctx.stroke();
-      ctx.fillStyle = "#8892a4";
-      ctx.font = "11px " + MONO;
-      ctx.textAlign = "center";
-      ctx.fillText(val.toFixed(1), x, H - pad.bottom + 16);
-    }
-
-    // Highlight lines
-    const drawHighlight = (val, label, clr, side) => {
-      if (!val) return;
-      const hy = sy(val / 1000);
-      ctx.strokeStyle = clr;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath(); ctx.moveTo(pad.left, hy); ctx.lineTo(pad.left + pw, hy); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = clr;
-      ctx.font = "bold 10px " + FONT;
-      ctx.textAlign = side === "right" ? "right" : "left";
-      const xPos = side === "right" ? pad.left + pw - 4 : pad.left + 4;
-      ctx.fillText(label || "", xPos, hy - 6);
-    };
-    drawHighlight(highlightY, highlightLabel, "#15803d", "left");
-    drawHighlight(highlightY2, highlightLabel2, "#dc2626", "right");
-
-    // Primary data line (Force)
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    data.forEach((d, i) => {
-      const px = sx(d[xKey]);
-      const py = sy(d[yKey]);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
-
-    // Area fill for primary
-    ctx.globalAlpha = 0.08;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(sx(data[0][xKey]), sy(0));
-    data.forEach(d => ctx.lineTo(sx(d[xKey]), sy(d[yKey])));
-    ctx.lineTo(sx(data[data.length - 1][xKey]), sy(0));
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // ── Overlay series (right Y-axis) ──
-    if (hasOverlays) {
-      // Compute right-axis max: use max of all overlay values
-      let rMax = 0;
-      for (const ov of overlays) {
-        const ovMax = Math.max(...data.map(d => d[ov.key] || 0));
-        if (ovMax > rMax) rMax = ovMax;
-      }
-      rMax = rMax * 1.1 || 1;
-
-      const syR = v => pad.top + ph - ((v) / rMax) * ph;
-
-      // Right Y-axis ticks
-      for (let i = 0; i <= yTicks; i++) {
-        const val = rMax * i / yTicks;
-        const y = syR(val);
-        ctx.fillStyle = "#8892a4";
-        ctx.font = "11px " + MONO;
-        ctx.textAlign = "left";
-        ctx.fillText(val.toFixed(0), pad.left + pw + 8, y + 4);
-      }
-
-      // Draw each overlay line
-      for (const ov of overlays) {
-        ctx.strokeStyle = ov.color;
-        ctx.lineWidth = 2;
-        ctx.lineJoin = "round";
-        ctx.setLineDash(ov.dashPattern || []);
-        ctx.beginPath();
-        data.forEach((d, i) => {
-          const px = sx(d[xKey]);
-          const py = syR(d[ov.key] || 0);
-          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        });
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      // Right axis label — combine overlay labels
-      const rightLabel = overlays.map(ov => `${ov.label} (${ov.unit})`).join("  /  ");
-      ctx.fillStyle = "#5a6478";
-      ctx.font = "bold 10px " + FONT;
-      ctx.textAlign = "center";
-      ctx.save();
-      ctx.translate(W - 6, pad.top + ph / 2);
-      ctx.rotate(Math.PI / 2);
-      ctx.fillText(rightLabel, 0, 0);
-      ctx.restore();
-    }
-
-    // Axis labels
-    ctx.fillStyle = "#5a6478";
-    ctx.font = "bold 11px " + FONT;
-    ctx.textAlign = "center";
-    ctx.fillText(xLabel, pad.left + pw / 2, H - 4);
-    ctx.save();
-    ctx.translate(14, pad.top + ph / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(yLabel, 0, 0);
-    ctx.restore();
-
-    // ── Legend (if overlays) ──
-    if (hasOverlays) {
-      const legendY = pad.top + 10;
-      let legendX = pad.left + 6;
-      const items = [{ label: yLabel, color: color, dash: false }, ...overlays.map(ov => ({ label: ov.label, color: ov.color, dash: !!ov.dashPattern }))];
-      ctx.font = "bold 10px " + FONT;
-      for (const item of items) {
-        // Line sample
-        ctx.strokeStyle = item.color;
-        ctx.lineWidth = 2;
-        if (item.dash) ctx.setLineDash([6, 3]);
-        else ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(legendX, legendY);
-        ctx.lineTo(legendX + 16, legendY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // Label
-        ctx.fillStyle = item.color;
-        ctx.textAlign = "left";
-        ctx.fillText(item.label, legendX + 20, legendY + 4);
-        legendX += ctx.measureText(item.label).width + 36;
-      }
-    }
-
-  }, [data, xKey, yKey, xLabel, yLabel, color, highlightY, highlightLabel, highlightY2, highlightLabel2, overlays, hasOverlays]);
-
-  return (
-    <div ref={containerRef} style={{ width: "100%", height: hasOverlays ? "280px" : "220px", borderRadius: "8px", overflow: "hidden", border: "1px solid #e2e5ea" }}>
-      <canvas ref={canvasRef} />
-    </div>
-  );
-}
-
 // ─── Slider ───────────────────────────────────────────────────────
 function ParamSlider({ label, unit, value, min, max, step, onChange, description }) {
   const pct = ((value - min) / (max - min)) * 100;
   return (
-    <div style={{ marginBottom: "20px" }}>
+    <div style={{ marginBottom: "18px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "2px" }}>
         <span style={{ color: "#2d3748", fontSize: "13px", fontFamily: FONT, fontWeight: 600 }}>{label}</span>
         <span style={{ color: "#1e40af", fontSize: "15px", fontFamily: MONO, fontWeight: 700 }}>{typeof step === "number" && step < 1 ? value.toFixed(1) : value.toFixed(step >= 1 ? 0 : 1)} <span style={{ color: "#8892a4", fontSize: "11px", fontWeight: 400 }}>{unit}</span></span>
@@ -335,33 +126,18 @@ function ParamSlider({ label, unit, value, min, max, step, onChange, description
   );
 }
 
-// ─── Result Card ──────────────────────────────────────────────────
-function ResultCard({ label, value, unit, accent, small, tonValue }) {
+// ─── Stat Card ────────────────────────────────────────────────────
+function StatCard({ label, value, unit, tonValue, accent, bg }) {
   return (
     <div style={{
-      background: "#f8f9fb", border: "1px solid #e2e5ea", borderRadius: "8px",
-      padding: small ? "10px 12px" : "14px 16px", marginBottom: "8px"
+      background: bg || "#f8f9fb", border: "1px solid " + (bg ? "#fecaca" : "#e2e5ea"),
+      borderRadius: "8px", padding: "12px 14px"
     }}>
-      <div style={{ color: "#8892a4", fontSize: "11px", fontFamily: FONT, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>{label}</div>
-      <div style={{ color: accent || "#1a202c", fontSize: small ? "18px" : "22px", fontFamily: MONO, fontWeight: 700 }}>
+      <div style={{ color: "#8892a4", fontSize: "10px", fontFamily: FONT, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>{label}</div>
+      <div style={{ color: accent || "#1a202c", fontSize: "20px", fontFamily: MONO, fontWeight: 700 }}>
         {value} <span style={{ fontSize: "11px", color: "#a0a8b8", fontWeight: 400 }}>{unit}</span>
-        {tonValue && <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 500 }}> ({tonValue} tf)</span>}
       </div>
-    </div>
-  );
-}
-
-// ─── Heuristic Row ────────────────────────────────────────────────
-function HeuristicRow({ label, value, unit, ref_text }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "8px 0", borderBottom: "1px solid #f0f1f4" }}>
-      <div style={{ flex: 1 }}>
-        <span style={{ color: "#4a5568", fontSize: "12px", fontFamily: FONT }}>{label}</span>
-        {ref_text && <div style={{ color: "#b0b8c8", fontSize: "10px", fontFamily: FONT, marginTop: "1px" }}>{ref_text}</div>}
-      </div>
-      <span style={{ color: "#1e3a5f", fontSize: "14px", fontFamily: MONO, fontWeight: 700, marginLeft: "12px" }}>
-        {value} <span style={{ fontSize: "11px", color: "#8892a4", fontWeight: 400 }}>{unit}</span>
-      </span>
+      {tonValue && <div style={{ color: "#6b7280", fontSize: "12px", fontFamily: MONO, fontWeight: 500, marginTop: "2px" }}>({tonValue} ton)</div>}
     </div>
   );
 }
@@ -374,6 +150,7 @@ export default function AIMSRecoilCalculator() {
   const [boreTime, setBoreTime] = useState(8);
   const [recoilMass, setRecoilMass] = useState(120);
   const [strokeLength, setStrokeLength] = useState(500);
+  const [elevation, setElevation] = useState(70);
 
   const results = useMemo(() => computeRecoil({
     projMass, chargeMass, muzzleVel,
@@ -383,193 +160,405 @@ export default function AIMSRecoilCalculator() {
   }), [projMass, chargeMass, muzzleVel, boreTime, recoilMass, strokeLength]);
 
   const h = results.heuristics;
-
-  const colStyle = {
-    flex: 1, minWidth: "300px", padding: "24px",
-    background: "#ffffff", borderRadius: "12px",
-    border: "1px solid #dfe2e8", boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
-  };
-
-  const headingStyle = {
-    fontFamily: FONT, fontSize: "14px", fontWeight: 700,
-    color: "#1e3a5f", textTransform: "uppercase", letterSpacing: "0.12em",
-    borderBottom: "2px solid #c9a84c", paddingBottom: "10px", marginBottom: "20px"
-  };
-
-  const depVarStyle = {
-    display: "flex", justifyContent: "space-between", alignItems: "baseline",
-    padding: "10px 0", borderBottom: "1px solid #f0f1f4"
-  };
-
   const rigidKN = results.rigidForce / 1000;
   const avgKN = results.avgForce / 1000;
   const peakKN = results.peakForce / 1000;
+
+  // Vertical components at given elevation
+  const sinEl = Math.sin(elevation * Math.PI / 180);
+  const verticalPeakKN = peakKN * sinEl;
+  const verticalAvgKN = avgKN * sinEl;
+
+  const sectionHeading = {
+    fontFamily: FONT, fontSize: "13px", fontWeight: 700,
+    color: "#1e3a5f", textTransform: "uppercase", letterSpacing: "0.12em",
+    borderBottom: "2px solid #c9a84c", paddingBottom: "8px", marginBottom: "16px", marginTop: 0
+  };
+
+  const cardStyle = {
+    background: "#ffffff", borderRadius: "12px",
+    border: "1px solid #dfe2e8", boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+    padding: "20px 24px"
+  };
+
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+  // ── Highcharts: Force vs Time ──
+  const forceTimeOptions = {
+    chart: { type: "areaspline", height: 300, style: { fontFamily: FONT } },
+    title: { text: null },
+    credits: { enabled: false },
+    xAxis: { title: { text: "Time (ms)" }, labels: { style: { fontFamily: MONO, fontSize: "10px" } } },
+    yAxis: { title: { text: "Force (kN)" }, labels: { style: { fontFamily: MONO, fontSize: "10px" } },
+      plotLines: [{ value: avgKN, color: "#15803d", dashStyle: "Dash", width: 1.5,
+        label: { text: `Avg: ${avgKN.toFixed(0)} kN (${kNtoTon(avgKN)} ton)`, style: { color: "#15803d", fontSize: "10px", fontWeight: "bold" } }
+      }]
+    },
+    tooltip: {
+      shared: true, crosshairs: true,
+      headerFormat: "<b>t = {point.x:.1f} ms</b><br/>",
+      pointFormat: '<span style="color:{series.color}">\u25CF</span> {series.name}: <b>{point.y:.1f} kN ({point.ton} ton)</b><br/>',
+      style: { fontFamily: FONT }
+    },
+    legend: { enabled: false },
+    plotOptions: { areaspline: { fillOpacity: 0.06, lineWidth: 2.5, marker: { enabled: false } } },
+    series: [{
+      name: "Force",
+      color: "#1e40af",
+      data: results.timeData.map(([t, F]) => ({ x: t, y: F, ton: kNtoTon(F) }))
+    }]
+  };
+
+  // ── Highcharts: Force + Velocity + Energy vs Stroke ──
+  const strokeForceData = results.posData.map(d => ({ x: d.x, y: d.F, ton: kNtoTon(d.F) }));
+  const strokeVelData = results.posData.map(d => [d.x, d.v]);
+  const strokeEnergyData = results.posData.map(d => [d.x, d.Er]);
+
+  const forceStrokeOptions = {
+    chart: { height: 300, style: { fontFamily: FONT } },
+    title: { text: null },
+    credits: { enabled: false },
+    xAxis: { title: { text: "Stroke (mm)" }, labels: { style: { fontFamily: MONO, fontSize: "10px" } } },
+    yAxis: [
+      {
+        title: { text: "Force (kN)", style: { color: "#c2410c" } },
+        labels: { style: { fontFamily: MONO, fontSize: "10px", color: "#c2410c" } },
+        plotLines: [{ value: avgKN, color: "#15803d", dashStyle: "Dash", width: 1.5,
+          label: { text: `Avg: ${avgKN.toFixed(0)} kN (${kNtoTon(avgKN)} ton)`, style: { color: "#15803d", fontSize: "10px", fontWeight: "bold" } }
+        }]
+      },
+      {
+        title: { text: "Velocity (m/s) / Energy (kJ)", style: { color: "#6b7280" } },
+        labels: { style: { fontFamily: MONO, fontSize: "10px", color: "#6b7280" } },
+        opposite: true
+      }
+    ],
+    tooltip: {
+      shared: true, crosshairs: true,
+      style: { fontFamily: FONT }
+    },
+    legend: { align: "left", verticalAlign: "top", floating: true, y: -5, itemStyle: { fontFamily: FONT, fontSize: "11px", fontWeight: "600" } },
+    plotOptions: {
+      areaspline: { fillOpacity: 0.06, lineWidth: 2.5, marker: { enabled: false } },
+      spline: { lineWidth: 2, marker: { enabled: false } }
+    },
+    series: [
+      {
+        name: "Force (kN)",
+        type: "areaspline",
+        color: "#c2410c",
+        data: strokeForceData,
+        tooltip: { pointFormat: '<span style="color:{series.color}">\u25CF</span> Force: <b>{point.y:.1f} kN ({point.ton} ton)</b><br/>' },
+        yAxis: 0
+      },
+      {
+        name: "Velocity (m/s)",
+        type: "spline",
+        color: "#0891b2",
+        dashStyle: "Dash",
+        data: strokeVelData,
+        tooltip: { pointFormat: '<span style="color:{series.color}">\u25CF</span> Velocity: <b>{point.y:.1f} m/s</b><br/>' },
+        yAxis: 1
+      },
+      {
+        name: "Rem. Energy (kJ)",
+        type: "spline",
+        color: "#d97706",
+        dashStyle: "ShortDot",
+        data: strokeEnergyData,
+        tooltip: { pointFormat: '<span style="color:{series.color}">\u25CF</span> Energy: <b>{point.y:.1f} kJ</b><br/>' },
+        yAxis: 1
+      }
+    ]
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#f3f4f7", color: "#1a202c", fontFamily: FONT }}>
 
       {/* Header */}
-      <div style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a2e4a 60%, #243b5c 100%)", borderBottom: "3px solid #c9a84c", padding: "28px 32px 20px" }}>
-        <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
+      <div style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a2e4a 60%, #243b5c 100%)", borderBottom: "3px solid #c9a84c", padding: "22px 32px 16px" }}>
+        <div style={{ maxWidth: "1440px", margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: "16px", flexWrap: "wrap" }}>
-            <h1 style={{ fontFamily: FONT, fontSize: "26px", fontWeight: 800, color: "#ffffff", margin: 0 }}>AIMS Recoil Calculator</h1>
-            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "12px", letterSpacing: "0.1em" }}>120MM SMOOTH-BORE MORTAR · VARIABLE-ORIFICE BUFFER SIZING</span>
+            <h1 style={{ fontFamily: FONT, fontSize: "24px", fontWeight: 800, color: "#ffffff", margin: 0 }}>AIMS Recoil Calculator</h1>
+            <span style={{ color: "rgba(255,255,255,0.45)", fontSize: "12px", letterSpacing: "0.1em" }}>120MM SMOOTH-BORE MORTAR · VARIABLE-ORIFICE BUFFER SIZING</span>
           </div>
-          <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "11px", marginTop: "6px", letterSpacing: "0.05em" }}>
-            Ref: Carlucci & Jacobson Ch.15 · AMCP 706-342 §4-4 · Rheinmetall Handbook §9.3 · Assumes ideal variable-orifice design
-          </div>
-        </div>
-      </div>
-
-      {/* Three Columns */}
-      <div style={{ maxWidth: "1400px", margin: "24px auto", padding: "0 24px", display: "flex", gap: "20px", flexWrap: "wrap", alignItems: "flex-start" }}>
-
-        {/* ── Column 1: Independent Variables ── */}
-        <div style={colStyle}>
-          <h2 style={headingStyle}>① Independent Variables</h2>
-
-          <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "12px" }}>Ballistic Parameters</div>
-          <ParamSlider label="Projectile Mass" unit="kg" value={projMass} min={8} max={20} step={0.5} onChange={setProjMass} description="HE bomb: ~13 kg · Extended range: ~16 kg" />
-          <ParamSlider label="Charge Mass" unit="kg" value={chargeMass} min={0.5} max={6} step={0.1} onChange={setChargeMass} description="Zone 0: ~0.5 kg · Zone 4: ~3.5 kg" />
-          <ParamSlider label="Muzzle Velocity" unit="m/s" value={muzzleVel} min={100} max={500} step={5} onChange={setMuzzleVel} description="Zone 0: ~150 m/s · Zone 4: ~320 m/s" />
-          <ParamSlider label="Bore Time" unit="ms" value={boreTime} min={3} max={15} step={0.5} onChange={setBoreTime} description="Time projectile spends in barrel" />
-
-          <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "12px", marginTop: "24px" }}>Recoil System Parameters</div>
-          <ParamSlider label="Recoiling Mass" unit="kg" value={recoilMass} min={50} max={300} step={5} onChange={setRecoilMass} description="Barrel + cradle + sliding parts" />
-          <ParamSlider label="Allowed Stroke" unit="mm" value={strokeLength} min={200} max={800} step={10} onChange={setStrokeLength} description="Buffer travel length for RFQ" />
-
-          {/* Assumptions box */}
-          <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "12px 14px", marginTop: "20px" }}>
-            <div style={{ color: "#92400e", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px", fontWeight: 600 }}>Model Assumptions</div>
-            <div style={{ color: "#78716c", fontSize: "11px", lineHeight: 1.6 }}>
-              <div>• Variable-orifice hydraulic brake</div>
-              <div>• Near-constant force profile (AMCP 706-342 §4-4)</div>
-              <div>• Peak/Avg ratio: 1.15:1 (well-designed system)</div>
-              <div>• Gas velocity: 1.5 × muzzle vel (Rheinmetall §9.1)</div>
-              <div>• Recoil oil: MIL-PRF-46170 (ρ = 860 kg/m³)</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Column 2: Dependent Variables + Heuristics ── */}
-        <div style={colStyle}>
-          <h2 style={headingStyle}>② Dependent Variables</h2>
-
-          <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "12px" }}>Momentum & Energy</div>
-
-          <div style={depVarStyle}>
-            <span style={{ color: "#4a5568", fontSize: "13px" }}>Recoil Impulse (I<sub>r</sub>)</span>
-            <span style={{ color: "#1e40af", fontSize: "15px", fontWeight: 700 }}>{results.impulse.toFixed(0)} <span style={{ fontSize: "11px", color: "#a0a8b8" }}>N·s</span></span>
-          </div>
-          <div style={depVarStyle}>
-            <span style={{ color: "#4a5568", fontSize: "13px" }}>Free Recoil Velocity (V₀)</span>
-            <span style={{ color: "#1e40af", fontSize: "15px", fontWeight: 700 }}>{results.V0.toFixed(1)} <span style={{ fontSize: "11px", color: "#a0a8b8" }}>m/s</span></span>
-          </div>
-          <div style={depVarStyle}>
-            <span style={{ color: "#4a5568", fontSize: "13px" }}>Recoil Energy (E<sub>r</sub>)</span>
-            <span style={{ color: "#b45309", fontSize: "15px", fontWeight: 700 }}>{(results.recoilEnergy / 1000).toFixed(1)} <span style={{ fontSize: "11px", color: "#a0a8b8" }}>kJ</span></span>
-          </div>
-
-          {/* Rigid force */}
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "14px 16px", margin: "16px 0" }}>
-            <div style={{ color: "#b91c1c", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px", fontWeight: 600 }}>Mortar Reaction Force (Rigid Mount)</div>
-            <div style={{ color: "#dc2626", fontSize: "26px", fontWeight: 700 }}>
-              {rigidKN.toFixed(0)} <span style={{ fontSize: "12px", color: "#ef4444" }}>kN</span>
-              <span style={{ fontSize: "14px", color: "#b91c1c", fontWeight: 600 }}> ({kNtoTf(rigidKN)} tf)</span>
-            </div>
-            <div style={{ color: "#9ca3af", fontSize: "11px", marginTop: "4px" }}>F = I / τ = {results.impulse.toFixed(0)} / {boreTime.toFixed(1)}ms</div>
-          </div>
-
-          {/* Buffered results */}
-          <div style={depVarStyle}>
-            <span style={{ color: "#4a5568", fontSize: "13px" }}>Average Force (F<sub>avg</sub>)</span>
-            <span style={{ color: "#15803d", fontSize: "15px", fontWeight: 700 }}>{avgKN.toFixed(1)} <span style={{ fontSize: "11px", color: "#a0a8b8" }}>kN</span> <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 500 }}>({kNtoTf(avgKN)} tf)</span></span>
-          </div>
-          <div style={depVarStyle}>
-            <span style={{ color: "#4a5568", fontSize: "13px" }}>Peak Force (1.15 × avg)</span>
-            <span style={{ color: "#c2410c", fontSize: "15px", fontWeight: 700 }}>{peakKN.toFixed(1)} <span style={{ fontSize: "11px", color: "#a0a8b8" }}>kN</span> <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 500 }}>({kNtoTf(peakKN)} tf)</span></span>
-          </div>
-          <div style={depVarStyle}>
-            <span style={{ color: "#4a5568", fontSize: "13px" }}>Recoil Duration</span>
-            <span style={{ color: "#1e40af", fontSize: "15px", fontWeight: 700 }}>{(results.recoilTime * 1000).toFixed(1)} <span style={{ fontSize: "11px", color: "#a0a8b8" }}>ms</span></span>
-          </div>
-
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "14px 16px", marginTop: "12px" }}>
-            <div style={{ color: "#15803d", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px", fontWeight: 600 }}>Force Reduction vs Rigid</div>
-            <div style={{ color: "#16a34a", fontSize: "26px", fontWeight: 700 }}>
-              {results.forceReduction.toFixed(1)} <span style={{ fontSize: "12px", color: "#22c55e" }}>%</span>
-            </div>
-            <div style={{ color: "#9ca3af", fontSize: "11px", marginTop: "4px" }}>{rigidKN.toFixed(0)} kN ({kNtoTf(rigidKN)} tf) → {peakKN.toFixed(1)} kN ({kNtoTf(peakKN)} tf) peak</div>
-          </div>
-
-          {/* Heuristics */}
-          <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px", marginTop: "24px" }}>Design Heuristics</div>
-          <div style={{ background: "#f8f9fb", border: "1px solid #e2e5ea", borderRadius: "8px", padding: "12px 14px" }}>
-            <HeuristicRow label="Piston Area (Ap)" value={h.pistonAreaCm2.toFixed(1)} unit="cm²" ref_text="Sized for ~25 MPa working pressure" />
-            <HeuristicRow label="Bore Diameter" value={h.boreDiaMm.toFixed(0)} unit="mm" ref_text="√(4·Ap / π)" />
-            <HeuristicRow label="Max Orifice Area (Ao)" value={h.orificeAreaCm2.toFixed(2)} unit="cm²" ref_text="At V₀, start of stroke (AMCP 706-342)" />
-            <HeuristicRow label="Orifice Ratio (Ao/Ap)" value={(h.orificeRatio * 100).toFixed(1)} unit="%" ref_text="Varies along stroke for const. force" />
-            <HeuristicRow label="Rod Diameter" value={h.rodDiaMm.toFixed(0)} unit="mm" ref_text="~0.55 × bore (Rheinmetall §9.3)" />
-            <HeuristicRow label="Est. Overall Length" value={(h.overallLengthMm).toFixed(0)} unit="mm" ref_text="~2.5 × stroke (incl. seals + accumulator)" />
-            <HeuristicRow label="Fluid Displaced" value={h.fluidVolumeCm3.toFixed(0)} unit="cm³" ref_text="Ap × stroke" />
-            <HeuristicRow label="Working Pressure" value={`${h.minPressureMPa.toFixed(0)}–${h.maxPressureMPa.toFixed(0)}`} unit="MPa" ref_text="Plateau to peak range" />
-            <HeuristicRow label="Discharge Coeff (Cd)" value={h.Cd.toFixed(2)} unit="" ref_text="Sharp-edged orifice assumption" />
-          </div>
-        </div>
-
-        {/* ── Column 3: Results / Charts ── */}
-        <div style={colStyle}>
-          <h2 style={headingStyle}>③ Results</h2>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-            <ResultCard label="Recoil Energy" value={(results.recoilEnergy / 1000).toFixed(1)} unit="kJ" accent="#b45309" small />
-            <ResultCard label="Peak Force" value={peakKN.toFixed(1)} unit="kN" accent="#c2410c" small tonValue={kNtoTf(peakKN)} />
-            <ResultCard label="Avg Force" value={avgKN.toFixed(1)} unit="kN" accent="#15803d" small tonValue={kNtoTf(avgKN)} />
-            <ResultCard label="Rigid Force" value={rigidKN.toFixed(0)} unit="kN" accent="#dc2626" small tonValue={kNtoTf(rigidKN)} />
-          </div>
-
-          <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px" }}>Force vs Time (Variable Orifice — Ideal)</div>
-          {results.timeData.length > 0 && (
-            <Chart data={results.timeData} xKey="t" yKey="F"
-              xLabel="Time (ms)" yLabel="Force (kN)" color="#1e40af"
-              highlightY={results.avgForce} highlightLabel={`Avg: ${avgKN.toFixed(0)} kN (${kNtoTf(avgKN)} tf)`}
-            />
-          )}
-
-          <div style={{ height: "16px" }} />
-
-          <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px" }}>Force, Velocity & Energy vs Stroke</div>
-          {results.posData.length > 0 && (
-            <Chart data={results.posData} xKey="x" yKey="F"
-              xLabel="Stroke (mm)" yLabel="Force (kN)" color="#c2410c"
-              highlightY={results.avgForce} highlightLabel={`Avg: ${avgKN.toFixed(0)} kN (${kNtoTf(avgKN)} tf)`}
-              overlays={[
-                { key: "v", color: "#0891b2", label: "Velocity", unit: "m/s", dashPattern: [8, 4] },
-                { key: "Er", color: "#d97706", label: "Remaining Energy", unit: "kJ", dashPattern: [4, 3] }
-              ]}
-            />
-          )}
-
-          {/* RFQ Summary */}
-          <div style={{ marginTop: "16px", background: "#f0f4ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "14px 16px" }}>
-            <div style={{ color: "#1e3a5f", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px", fontWeight: 700 }}>RFQ Specification Summary</div>
-            <div style={{ fontSize: "12px", color: "#4a5568", lineHeight: 1.8 }}>
-              <div>Energy per cycle: <strong style={{ color: "#b45309" }}>{(results.recoilEnergy / 1000).toFixed(1)} kJ</strong></div>
-              <div>Required stroke: <strong style={{ color: "#1e40af" }}>{strokeLength} mm</strong></div>
-              <div>Peak input velocity: <strong style={{ color: "#1e40af" }}>{results.V0.toFixed(1)} m/s</strong></div>
-              <div>Target avg braking force: <strong style={{ color: "#15803d" }}>{avgKN.toFixed(1)} kN ({kNtoTf(avgKN)} tf)</strong></div>
-              <div>Max braking force: <strong style={{ color: "#c2410c" }}>{peakKN.toFixed(1)} kN ({kNtoTf(peakKN)} tf)</strong></div>
-              <div>Recoil impulse: <strong style={{ color: "#1e40af" }}>{results.impulse.toFixed(0)} N·s</strong></div>
-              <div>Recoiling mass: <strong style={{ color: "#1e40af" }}>{recoilMass} kg</strong></div>
-              <div>Bore: <strong style={{ color: "#1e3a5f" }}>120 mm smooth-bore mortar</strong></div>
-              <div>Type: <strong style={{ color: "#1e3a5f" }}>Variable-orifice hydraulic, with return accumulator</strong></div>
-            </div>
+          <div style={{ color: "rgba(255,255,255,0.3)", fontSize: "11px", marginTop: "4px", letterSpacing: "0.05em" }}>
+            Ref: Carlucci & Jacobson Ch.15 · AMCP 706-342 §4-4 · Rheinmetall Handbook §9.3
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: "1400px", margin: "8px auto 24px", padding: "0 24px", color: "#c0c5d0", fontSize: "10px", letterSpacing: "0.05em" }}>
-        AIMS · Autonomous Integrated Mortar System · ARDIC Wah Cantt · Variable-Orifice Model · Carlucci & Jacobson 3rd Ed. · AMCP 706-342
+      <div style={{ maxWidth: "1440px", margin: "0 auto", padding: "20px 24px 32px" }}>
+
+        {/* ════════ ROW 1: Inputs + Key Results ════════ */}
+        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "20px", marginBottom: "20px" }}>
+
+          {/* ── Inputs ── */}
+          <div style={cardStyle}>
+            <h2 style={sectionHeading}>Inputs</h2>
+
+            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>Ballistic</div>
+            <ParamSlider label="Projectile Mass" unit="kg" value={projMass} min={8} max={20} step={0.5} onChange={setProjMass} description="HE: ~13 kg · ER: ~16 kg" />
+            <ParamSlider label="Charge Mass" unit="kg" value={chargeMass} min={0.5} max={6} step={0.1} onChange={setChargeMass} description="Zone 0: ~0.5 kg · Zone 4: ~3.5 kg" />
+            <ParamSlider label="Muzzle Velocity" unit="m/s" value={muzzleVel} min={100} max={500} step={5} onChange={setMuzzleVel} description="Zone 0: ~150 · Zone 4: ~320 m/s" />
+            <ParamSlider label="Bore Time" unit="ms" value={boreTime} min={3} max={15} step={0.5} onChange={setBoreTime} />
+
+            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px", marginTop: "16px" }}>Recoil System</div>
+            <ParamSlider label="Recoiling Mass" unit="kg" value={recoilMass} min={50} max={300} step={5} onChange={setRecoilMass} description="Barrel + cradle + sliding parts" />
+            <ParamSlider label="Allowed Stroke" unit="mm" value={strokeLength} min={200} max={800} step={10} onChange={setStrokeLength} description="Buffer travel length" />
+            <ParamSlider label="Elevation Angle" unit="°" value={elevation} min={45} max={85} step={1} onChange={setElevation} description="Mortar tube elevation above horizontal" />
+
+            <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "10px 12px", marginTop: "12px" }}>
+              <div style={{ color: "#92400e", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px", fontWeight: 600 }}>Assumptions</div>
+              <div style={{ color: "#78716c", fontSize: "10.5px", lineHeight: 1.5 }}>
+                Variable-orifice brake · Peak/Avg 1.15:1 · Gas vel 1.5×V<sub>muz</sub> · MIL-PRF-46170 oil (ρ=860)
+              </div>
+            </div>
+          </div>
+
+          {/* ── Key Results Dashboard ── */}
+          <div style={cardStyle}>
+            <h2 style={sectionHeading}>Results</h2>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
+              <StatCard label="Recoil Impulse" value={results.impulse.toFixed(0)} unit="N·s" accent="#1e40af" />
+              <StatCard label="Free Recoil Velocity" value={results.V0.toFixed(1)} unit="m/s" accent="#1e40af" />
+              <StatCard label="Recoil Energy" value={(results.recoilEnergy / 1000).toFixed(1)} unit="kJ" accent="#b45309" />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+              <StatCard label="Rigid Force (no buffer)" value={rigidKN.toFixed(0)} unit="kN" accent="#dc2626" tonValue={kNtoTon(rigidKN)} bg="#fef2f2" />
+              <StatCard label="Avg Buffered Force" value={avgKN.toFixed(1)} unit="kN" accent="#15803d" tonValue={kNtoTon(avgKN)} />
+              <StatCard label="Peak Buffered Force" value={peakKN.toFixed(1)} unit="kN" accent="#c2410c" tonValue={kNtoTon(peakKN)} />
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 14px" }}>
+                <div style={{ color: "#8892a4", fontSize: "10px", fontFamily: FONT, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>Force Reduction</div>
+                <div style={{ color: "#16a34a", fontSize: "20px", fontFamily: MONO, fontWeight: 700 }}>
+                  {results.forceReduction.toFixed(1)}<span style={{ fontSize: "12px" }}>%</span>
+                </div>
+                <div style={{ color: "#9ca3af", fontSize: "10px", marginTop: "2px" }}>Duration: {(results.recoilTime * 1000).toFixed(1)} ms</div>
+              </div>
+            </div>
+
+            {/* ── Vertical Load on Vehicle Chassis ── */}
+            <div style={{ background: "#fef3c7", border: "2px solid #f59e0b", borderRadius: "8px", padding: "14px 18px", marginBottom: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                <div>
+                  <div style={{ color: "#92400e", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px", fontWeight: 700 }}>Vertical Load on Vehicle Chassis</div>
+                  <div style={{ color: "#78716c", fontSize: "11px" }}>
+                    At elevation {elevation}° (sin {elevation}° = {sinEl.toFixed(3)})
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "24px" }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: "#92400e", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Peak Vertical</div>
+                    <div style={{ color: "#b45309", fontSize: "22px", fontFamily: MONO, fontWeight: 700 }}>
+                      {verticalPeakKN.toFixed(1)} <span style={{ fontSize: "12px" }}>kN</span>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#92400e" }}> ({kNtoTon(verticalPeakKN)} ton)</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: "#92400e", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Avg Vertical</div>
+                    <div style={{ color: "#b45309", fontSize: "22px", fontFamily: MONO, fontWeight: 700 }}>
+                      {verticalAvgKN.toFixed(1)} <span style={{ fontSize: "12px" }}>kN</span>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#92400e" }}> ({kNtoTon(verticalAvgKN)} ton)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cylinder heuristics — compact table */}
+            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px" }}>Buffer Cylinder Heuristics</div>
+            <div style={{ background: "#f8f9fb", border: "1px solid #e8eaef", borderRadius: "8px", overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: FONT }}>
+                <tbody>
+                  <tr>
+                    {[
+                      ["Bore Dia", h.boreDiaMm.toFixed(0) + " mm"],
+                      ["Piston Area", h.pistonAreaCm2.toFixed(1) + " cm²"],
+                      ["Rod Dia", h.rodDiaMm.toFixed(0) + " mm"],
+                      ["Orifice Area", h.orificeAreaCm2.toFixed(1) + " cm²"],
+                      ["Orifice Ratio", (h.orificeRatio * 100).toFixed(1) + "%"],
+                    ].map(([lbl, val], i) => (
+                      <td key={i} style={{ padding: "8px 10px", borderRight: i < 4 ? "1px solid #e8eaef" : "none", borderBottom: "1px solid #e8eaef" }}>
+                        <div style={{ color: "#8892a4", fontSize: "10px", marginBottom: "2px" }}>{lbl}</div>
+                        <div style={{ color: "#1e3a5f", fontFamily: MONO, fontWeight: 700 }}>{val}</div>
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    {[
+                      ["Overall Length", h.overallLengthMm.toFixed(0) + " mm"],
+                      ["Fluid Volume", h.fluidVolumeCm3.toFixed(0) + " cm³"],
+                      ["Pressure Range", h.minPressureMPa.toFixed(0) + "–" + h.maxPressureMPa.toFixed(0) + " MPa"],
+                      ["Cd (orifice)", h.Cd.toFixed(2)],
+                      ["Oil Spec", "MIL-PRF-46170"],
+                    ].map(([lbl, val], i) => (
+                      <td key={i} style={{ padding: "8px 10px", borderRight: i < 4 ? "1px solid #e8eaef" : "none" }}>
+                        <div style={{ color: "#8892a4", fontSize: "10px", marginBottom: "2px" }}>{lbl}</div>
+                        <div style={{ color: "#1e3a5f", fontFamily: MONO, fontWeight: 700, fontSize: "12px" }}>{val}</div>
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* ════════ ROW 2: Charts side-by-side ════════ */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+          <div style={cardStyle}>
+            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Force vs Time (Ideal Variable-Orifice)</div>
+            <HighchartsReact highcharts={Highcharts} options={forceTimeOptions} />
+          </div>
+          <div style={cardStyle}>
+            <div style={{ color: "#a0a8b8", fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>Force, Velocity & Energy vs Stroke</div>
+            <HighchartsReact highcharts={Highcharts} options={forceStrokeOptions} />
+          </div>
+        </div>
+
+        {/* ════════ ROW 3: RFQ Email Draft ════════ */}
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <h2 style={{ ...sectionHeading, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>RFQ Email Draft</h2>
+            <button
+              onClick={() => {
+                const el = document.getElementById("rfq-email-body");
+                if (el) {
+                  navigator.clipboard.writeText(el.innerText);
+                  const btn = document.getElementById("rfq-copy-btn");
+                  if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy to Clipboard"; }, 2000); }
+                }
+              }}
+              id="rfq-copy-btn"
+              style={{
+                background: "#1e3a5f", color: "#fff", border: "none", borderRadius: "6px",
+                padding: "8px 16px", fontSize: "12px", fontFamily: FONT, fontWeight: 600,
+                cursor: "pointer", letterSpacing: "0.05em"
+              }}
+            >Copy to Clipboard</button>
+          </div>
+
+          <div style={{ borderBottom: "2px solid #c9a84c", marginBottom: "16px" }} />
+
+          <div id="rfq-email-body" style={{ background: "#fafbfc", border: "1px solid #e8eaef", borderRadius: "8px", padding: "24px 28px", fontSize: "13px", lineHeight: 1.75, color: "#374151" }}>
+
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ color: "#8892a4", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>Subject</div>
+              <div style={{ fontWeight: 600, color: "#1e3a5f" }}>
+                RFQ — Heavy-Duty Hydraulic Shock Absorber for 120mm Mortar Recoil System (AIMS Programme)
+              </div>
+            </div>
+
+            <div style={{ borderBottom: "1px solid #e8eaef", margin: "12px 0 16px" }} />
+
+            <p>Dear Sir/Madam,</p>
+
+            <p>
+              We are writing from <strong>ARDIC (Advance Research, Development and Innovation Center)</strong>, Wah Cantt, Pakistan. We are currently executing the <strong>AIMS (Autonomous Integrated Mortar System)</strong> programme — an 18-month R&D effort integrating a 120mm smooth-bore mortar onto a Toyota Land Cruiser 79 platform.
+            </p>
+
+            <p>
+              As part of this programme, we require an <strong>off-the-shelf heavy-duty hydraulic shock absorber</strong> (variable-orifice type, with integrated return mechanism) to serve as the primary recoil buffer. We understand the <strong>Enidine HD/HDN Series</strong> heavy-duty industrial shock absorbers may be suitable for this application and would appreciate a formal quotation based on the following specifications.
+            </p>
+
+            <p style={{ fontWeight: 600, color: "#1e3a5f", marginTop: "20px", marginBottom: "8px" }}>1. Application Overview</p>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", marginBottom: "16px" }}>
+              <tbody>
+                {[
+                  ["Weapon System", "120mm smooth-bore mortar (vehicle-mounted)"],
+                  ["Platform", "Toyota Land Cruiser 79 (4×4)"],
+                  ["Firing Cycle", "Repetitive, up to 6–8 rounds per minute"],
+                  ["Operating Environment", "Desert & mountain terrain, −10°C to +55°C ambient"],
+                  ["Mounting Orientation", `Near-vertical (elevation ${elevation}° typical, range 45°–85°), with lateral loads during traverse`],
+                ].map(([lbl, val], i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #e8eaef" }}>
+                    <td style={{ padding: "6px 12px 6px 0", color: "#6b7280", fontWeight: 500, width: "200px" }}>{lbl}</td>
+                    <td style={{ padding: "6px 0", color: "#1a202c" }}>{val}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>2. Recoil Buffer Requirements</p>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", marginBottom: "16px" }}>
+              <tbody>
+                {[
+                  ["Recoil Energy per Cycle", `${(results.recoilEnergy / 1000).toFixed(1)} kJ`],
+                  ["Peak Input Velocity", `${results.V0.toFixed(1)} m/s`],
+                  ["Required Stroke", `${strokeLength} mm`],
+                  ["Recoiling Mass", `${recoilMass} kg`],
+                  ["Recoil Impulse", `${results.impulse.toFixed(0)} N·s`],
+                  ["Target Avg Braking Force", `${avgKN.toFixed(1)} kN (${kNtoTon(avgKN)} ton)`],
+                  ["Max Allowable Peak Force", `${peakKN.toFixed(1)} kN (${kNtoTon(peakKN)} ton)`],
+                  ["Recoil Duration", `${(results.recoilTime * 1000).toFixed(1)} ms`],
+                  ["Force Profile", "Near-constant (variable-orifice preferred)"],
+                  ["Return Mechanism", "Required — spring or gas-assisted accumulator"],
+                ].map(([lbl, val], i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #e8eaef" }}>
+                    <td style={{ padding: "6px 12px 6px 0", color: "#6b7280", fontWeight: 500, width: "240px" }}>{lbl}</td>
+                    <td style={{ padding: "6px 0", color: "#1a202c", fontWeight: 600 }}>{val}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>3. Estimated Cylinder Sizing (for reference)</p>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", marginBottom: "16px" }}>
+              <tbody>
+                {[
+                  ["Bore Diameter", `~${h.boreDiaMm.toFixed(0)} mm`],
+                  ["Rod Diameter", `~${h.rodDiaMm.toFixed(0)} mm`],
+                  ["Overall Length (est.)", `~${h.overallLengthMm.toFixed(0)} mm`],
+                  ["Working Pressure Range", `${h.minPressureMPa.toFixed(0)}–${h.maxPressureMPa.toFixed(0)} MPa`],
+                  ["Hydraulic Fluid", "MIL-PRF-46170 compatible (ρ ≈ 860 kg/m³)"],
+                ].map(([lbl, val], i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #e8eaef" }}>
+                    <td style={{ padding: "6px 12px 6px 0", color: "#6b7280", fontWeight: 500, width: "240px" }}>{lbl}</td>
+                    <td style={{ padding: "6px 0", color: "#1a202c" }}>{val}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>4. Information Requested</p>
+            <ol style={{ paddingLeft: "20px", marginBottom: "16px" }}>
+              <li>Recommended model(s) from your HD/HDN product line that meet or exceed the above specifications.</li>
+              <li>Unit pricing for quantities of 2 (prototype) and 10 (low-rate initial production).</li>
+              <li>Lead time for prototype delivery.</li>
+              <li>Certified force-displacement and force-velocity characterization data for the recommended model.</li>
+              <li>Mounting interface drawings and envelope dimensions.</li>
+              <li>Service life rating (number of full-energy cycles before rebuild/replacement).</li>
+              <li>Availability of customization (stroke length, mounting, return spring rate).</li>
+            </ol>
+
+            <p style={{ fontWeight: 600, color: "#1e3a5f", marginBottom: "8px" }}>5. Timeline</p>
+            <p>
+              We intend to finalize vendor selection within <strong>30 days</strong> of this enquiry. Prototype units are required within <strong>90 days</strong> of order placement. Early engagement on technical feasibility is highly appreciated.
+            </p>
+
+            <p>
+              Please do not hesitate to contact us for any clarification or additional technical data. We are happy to arrange a technical call to discuss the application in further detail.
+            </p>
+
+            <div style={{ marginTop: "24px" }}>
+              <p style={{ marginBottom: "4px" }}>Best regards,</p>
+              <p style={{ marginBottom: "2px" }}><strong>Maj Awais Mazahir</strong></p>
+              <p style={{ marginBottom: "2px", color: "#6b7280" }}>Officer in Charge — Design</p>
+              <p style={{ marginBottom: "2px", color: "#6b7280" }}>ARDIC (Advance Research, Development and Innovation Center)</p>
+              <p style={{ color: "#6b7280" }}>Wah Cantt, Pakistan</p>
+            </div>
+
+            <div style={{ borderTop: "1px solid #e8eaef", marginTop: "16px", paddingTop: "8px", color: "#9ca3af", fontSize: "10px" }}>
+              Generated {today} · AIMS Recoil Calculator · Values derived from Carlucci & Jacobson 3rd Ed., AMCP 706-342 §4-4
+            </div>
+          </div>
+        </div>
+
+        <div style={{ color: "#c0c5d0", fontSize: "10px", letterSpacing: "0.05em", marginTop: "16px", textAlign: "center" }}>
+          AIMS · Autonomous Integrated Mortar System · ARDIC Wah Cantt · Carlucci & Jacobson 3rd Ed. · AMCP 706-342
+        </div>
       </div>
     </div>
   );
